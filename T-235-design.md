@@ -54,6 +54,19 @@ When Leo moves an augmented image to trash (discards it), it lands in `{session_
 **Liked signal — Censored or PSD sibling:**  
 If any augmented image for a background has a `-Censored.*` or `.psd` sibling in a non-trash session directory, it means Leo already produced a result good enough to process further. These backgrounds may be deprioritised (see `--include-liked` flag below).
 
+Sibling filename patterns (both are parsed for background stem using the same `___` separator):
+- PSD: `{input}___{background}[.vN].psd`
+- Censored: `{input}___{background}[.vN]-Censored.[png|jpg|jpeg]`
+
+Detection regex (applied to each filename in `session_files`):
+```python
+LIKED_PATTERN = re.compile(
+    r'^.+?___(.+?)(?:\.v\d+)?(?:\.psd|-Censored\.(?:png|jpg|jpeg))$',
+    re.IGNORECASE
+)
+```
+If this regex matches, the captured group is the background stem — set `has_liked=True` for that stem. Censored/PSD files inside `.trash/` do **not** trigger the liked signal.
+
 **Background source directory:**  
 All background source images live under `backgrounds/` at the portfolio root. The internal structure is arbitrary — subdirectories include organically numbered collections (`ideas`, `ideas1`–`ideas9`) and named theme dirs (`Christmas`, `Winter`, `sea`, `fall`, etc.). Images may be at any depth. Background resolution must be a **recursive scan of `backgrounds/`**, not a fixed subdirectory list.
 
@@ -66,13 +79,26 @@ All background source images live under `backgrounds/` at the portfolio root. Th
 
 ### `BackgroundStats` (per background stem)
 
+```python
+@dataclass
+class BackgroundStats:
+    kept: int = 0
+    rejected: int = 0
+    has_liked: bool = False
+    resolved_path: Optional[str] = None
+
+    @property
+    def total(self) -> int:
+        return self.kept + self.rejected
+```
+
 | Field | Type | Description |
 |-------|------|-------------|
-| `total` | int | All augmented PNGs (kept + rejected) for this background across the whole portfolio |
-| `kept` | int | Non-trash augmented PNGs (Leo kept them) |
-| `rejected` | int | Augmented PNGs found inside any `.trash/` subdirectory |
-| `has_liked` | bool | True if any non-trash `-Censored.*` or `.psd` sibling exists for this background — signals Leo already produced a result he liked |
-| `resolved_path` | str or None | Relative path from portfolio root — used internally to verify the file exists on disk. **Not written to CSV.** None if the background file is not found on disk (row skipped in output). |
+| `kept` | int | Non-trash augmented PNGs (Leo kept them). Default `0`. |
+| `rejected` | int | Augmented PNGs found inside any `.trash/` subdirectory. Default `0`. |
+| `total` | int (derived) | `kept + rejected` — computed property, not stored separately. |
+| `has_liked` | bool | True if any non-trash `-Censored.*` or `.psd` sibling exists for this background. Default `False`. |
+| `resolved_path` | `Optional[str]` | Relative path from portfolio root — used internally to verify the file exists on disk. **Not written to CSV.** Default `None`; row is skipped in output if still `None` after resolution step. |
 
 ---
 
@@ -104,18 +130,18 @@ Single-pass `os.walk` of the portfolio:
    - `session_files`: filenames directly in the session dir (non-trash)
    - `trash_files`: filenames in `{session_dir}/.trash/` (if it exists)
 4. Run `_process_session(stats, session_files, trash_files)`:
-   - For each filename in `session_files` matching the augmented regex: increment `kept` for that background stem; check for liked siblings (censored/PSD) and set `has_liked=True` if found.
-   - For each filename in `trash_files` matching the augmented regex: increment `rejected` for that background stem; also increment `total`.
-   - `total = kept + rejected` (accumulated incrementally).
+   - For each filename in `session_files` matching the augmented regex: increment `kept` for that background stem; also check for liked siblings using `LIKED_PATTERN` and set `has_liked=True` if matched.
+   - For each filename in `trash_files` matching the augmented regex: increment `rejected` for that background stem.
+   - `total` is **derived**: `total = kept + rejected`. It is not tracked as a separate counter — compute it when needed (e.g. in `filter_and_sort` and `write_csv`). The `BackgroundStats.total` field reflects this at read time.
 
 Skip `.description/` and `.trash/` when walking — they are not session dirs.
 
 ### Step 2: `resolve_background_paths`
 
 For each stem in `stats`:
-- Recursively walk `backgrounds/ideas*/` subdirectories under `image_root` to find a file whose stem (name without extension) matches.
+- Recursively walk all of `backgrounds/` under `image_root` (no subdirectory filter — the internal structure is arbitrary and may change) to find a file whose stem (name without extension) matches.
 - If found in exactly one location: set `resolved_path` to confirm the file exists on disk.
-- If found in multiple `ideas*/` dirs: log error to stdout, use first match (alphabetical dir order).
+- If found in multiple locations: log error to stdout, use first match (alphabetical path order).
 - If not found: log error to stdout, leave `resolved_path = None` (row skipped in CSV output).
 
 ### Step 3: `filter_and_sort`
@@ -194,7 +220,7 @@ As a result:
 ```bash
 # Fred runs this in his Mac Terminal:
 cd /Users/fvong/work/leo/background_rejection
-python3 background_rejection_report.py --portfolio ~/Portfolio --output-csv rejected_backgrounds.csv
+python3 background_rejection_report.py --portfolio ~/Portfolio --output-csv data/rejected_backgrounds.csv
 ```
 
 No dependencies beyond the Python standard library (`os`, `re`, `csv`, `dataclasses`, `argparse`).
@@ -205,12 +231,27 @@ No dependencies beyond the Python standard library (`os`, `re`, `csv`, `dataclas
 
 > **⚠️ Sandbox limitation:** The portfolio is on a NAS — only Fred can access it. The sandbox cannot reach NAS resources, and Cowork cannot mount them. **Fred must run this script** and share the CSV output with Leo. Do not ask Claude to execute it.
 
-1. Fred runs the script from his Mac Terminal → produces CSV and shares it with Leo.
-2. Open the CSV. Review top entries (worst backgrounds first).
-3. For each bad background, copy the `background_filename` value.
-4. Open Background Studio and pass the filename — Background Studio resolves it to the current path.
-5. Read the current description, revise it, submit a new generation task.
-6. Review the new augmented images. Repeat until yield improves.
+**One-time setup** (Fred, run once):
+```bash
+mkdir -p /Users/fvong/work/leo/background_rejection/data
+```
+
+**Run the report** (Fred, Mac Terminal):
+```bash
+cd /Users/fvong/work/leo/background_rejection
+python3 background_rejection_report.py \
+    --portfolio ~/Portfolio \
+    --output-csv data/rejected_backgrounds.csv
+```
+
+The output lands at `/Users/fvong/work/leo/background_rejection/data/rejected_backgrounds.csv` — a connected Cowork folder Leo can open directly. The `data/` directory is gitignored; generated CSVs are not committed.
+
+**Leo's review steps:**
+1. Open `data/rejected_backgrounds.csv`. Review top entries (worst backgrounds first).
+2. For each bad background, copy the `background_filename` value.
+3. Open Background Studio and pass the filename — Background Studio resolves it to the current path on-demand.
+4. Read the current description, revise it, submit a new generation task.
+5. Review the new augmented images. Repeat until yield improves.
 
 ---
 
@@ -249,13 +290,30 @@ Ben reviews the algorithm above for correctness and completeness:
 - No `__init__.py`, no imports from `image_search` — fully standalone.
 - Copyright header required (Paul's gate).
 - The augmented regex and year-dir filter must match `FILE_STRUCTURE_AND_NAMING.md` exactly — do not copy from memory, read the doc.
-- Tests: `pytest` test file alongside the script. Use `tmp_path` fixtures to create fake portfolio trees. Cover: empty portfolio, background not found on disk, stem in multiple dirs, `has_liked` detection, threshold edge cases, **and read-only assertion** (see Paul's gate below).
+- Tests: `pytest` test file alongside the script. Use `tmp_path` fixtures to create fake portfolio trees. Required test cases:
+  - `test_empty_portfolio` — no augmented images found, CSV has header only
+  - `test_background_not_found_on_disk` — stem in stats but absent from `backgrounds/`, row skipped
+  - `test_stem_in_multiple_dirs` — duplicate background filenames, first match used, error logged
+  - `test_has_liked_detection` — Censored and PSD siblings correctly set `has_liked=True`; Censored in `.trash/` does NOT
+  - `test_threshold_edge_cases` — exactly at `min_total` boundary (inclusive), exactly at `max_kept` boundary (exclusive)
+  - `test_missing_output_csv_exits` — invoking the script without `--output-csv` exits with a non-zero code
+  - `test_script_is_read_only` — see Paul's gate below
 - No Flask, no `lib/` imports, no `sys.exit` in the core logic functions (keep them pure and testable).
-- **Read-only gate (Paul's requirement):** The script must never write to the portfolio or NAS. Add a test (`test_script_is_read_only`) that scans the script source for forbidden write patterns and asserts none are present:
-  - `open(` with mode `w`, `a`, `x`, `wb`, `ab`, `xb`
-  - `os.remove`, `os.unlink`, `os.rename`, `os.makedirs`, `os.mkdir`
-  - `shutil.copy`, `shutil.move`, `shutil.rmtree`
-  The only permitted write is to `--output-csv`, which targets a path the user controls — never under `--portfolio`.
+- **Read-only gate (Paul's requirement):** The script must never write to the portfolio or NAS. `test_script_is_read_only` reads the script source as text and asserts none of the following Python syntax patterns are present. Use precise regexes to avoid false positives from comments:
+
+  ```python
+  FORBIDDEN_PATTERNS = [
+      (r'\bopen\s*\([^)]*["\'](?:w|a|x|wb|ab|xb)["\']', "write-mode open()"),
+      (r'\bos\.remove\s*\(',                              "os.remove"),
+      (r'\bos\.unlink\s*\(',                              "os.unlink"),
+      (r'\bos\.rename\s*\(',                              "os.rename"),
+      (r'\bos\.makedirs\s*\(',                            "os.makedirs"),
+      (r'\bos\.mkdir\s*\(',                               "os.mkdir"),
+      (r'\bshutil\.(copy|move|rmtree)\s*\(',             "shutil write op"),
+  ]
+  ```
+
+  The only permitted write operation is opening `--output-csv` for writing, which is handled by `write_csv` — Fae must ensure that function uses a clearly named local variable (e.g. `output_path`) and that the pattern above does not match it (it won't, since `csv.writer` uses the already-opened file handle, not a raw `open(... 'w')`). If the test flags a false positive, fix the implementation pattern rather than weakening the test.
 
 ---
 

@@ -22,8 +22,9 @@ env/
 .coverage
 htmlcov/
 
-# Output files (don't track generated CSVs)
+# Output files (don't track generated CSVs or data dir contents)
 *.csv
+background_rejection/data/
 
 # Editor
 .idea/
