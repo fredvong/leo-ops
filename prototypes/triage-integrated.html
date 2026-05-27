@@ -1,0 +1,1482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Optimized Augmented Image Search</title>
+  <style>
+    /* ─── CSS variables — image_search-client global.css ─── */
+    :root {
+      --color-primary:        #007bff;
+      --color-primary-hover:  #0056b3;
+      --color-primary-light:  rgba(0,123,255,0.25);
+      --color-success:        #28a745;
+      --color-danger:         #dc3545;
+      --color-warning:        #ffc107;
+      --color-info:           #17a2b8;
+      --color-orange:         #ff9800;
+      --color-purple-600:     #6f42c1;
+      --color-pink:           #ec4899;
+      --color-amber:          #d97706;
+
+      --color-bg-primary:     #ffffff;
+      --color-bg-secondary:   #f8f9fa;
+      --color-surface:        #ffffff;
+
+      --color-text-primary:   #333;
+      --color-text-secondary: #666;
+      --color-text-muted:     #6b7280;
+
+      --color-border-dark:    #dee2e6;
+      --color-border-light:   #e9ecef;
+      --color-border-muted:   #dee2e6;
+
+      --color-shadow-ambient: rgba(0,0,0,0.1);
+
+      --color-gray-100: #f8f9fa;
+      --color-gray-200: #f0f0f0;
+      --color-gray-300: #dee2e6;
+      --color-gray-500: #6c757d;
+      --color-gray-600: #6b7280;
+      --color-gray-700: #495057;
+      --color-gray-800: #374151;
+      --color-gray-900: #333;
+
+      --radius-sm: 4px;
+      --radius-md: 6px;
+      --radius-lg: 8px;
+
+      --spacing-xs: 0.25rem;
+      --spacing-sm: 0.5rem;
+      --spacing-md: 1rem;
+
+      --shadow-sm:  0 1px 2px rgba(0,0,0,0.1);
+      --shadow-md:  0 4px 8px rgba(0,0,0,0.1);
+      --shadow-lg:  0 4px 20px rgba(0,0,0,0.15);
+
+      --transition-fast:   0.15s ease;
+      --transition-normal: 0.2s ease;
+      --focus-ring: 0 0 0 2px rgba(0,123,255,0.25);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--color-bg-secondary);
+      color: var(--color-text-primary);
+      font-size: 14px;
+    }
+
+    /* ─── App nav ─── */
+    .app-nav {
+      position: fixed;
+      top: 0; left: 0; right: 0; height: 35px;
+      background: var(--color-bg-primary);
+      border-bottom: 1px solid var(--color-border-dark);
+      display: flex; align-items: center;
+      padding: 0 12px; gap: 4px;
+      z-index: 600; font-size: 12px;
+    }
+    .nav-tab {
+      padding: 3px 10px; border-radius: var(--radius-sm);
+      border: none; background: none; cursor: pointer;
+      font-size: 12px; font-weight: 500;
+      color: var(--color-text-secondary); font-family: inherit;
+    }
+    .nav-tab.active { background: var(--color-gray-200); color: var(--color-text-primary); font-weight: 600; }
+    .nav-spacer { flex: 1; }
+    .nav-prototype-badge {
+      font-size: 10px; padding: 2px 7px; border-radius: 10px;
+      background: #fef9c3; color: #854d0e; border: 1px solid #fcd34d;
+      font-weight: 600;
+    }
+
+    /* ─── Config banner ─── */
+    .config-banner {
+      margin-top: 35px; /* below fixed nav */
+      display: flex; align-items: center; gap: 8px;
+      padding: 5px 12px;
+      background: #fef9c3; border-bottom: 1px solid #fcd34d;
+      font-size: 11px; color: #92400e;
+    }
+    .config-banner input {
+      padding: 2px 7px; border: 1px solid #fcd34d;
+      border-radius: var(--radius-sm); font-size: 11px;
+      background: white; width: 200px;
+    }
+
+    /* ─── Page container ─── */
+    .optimized-augmented-container {
+      padding: 12px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    /* ─── Sticky header wrapper ─── */
+    .sticky-header-wrapper {
+      position: sticky;
+      top: 71px; /* nav 35px + config 18px + demo banner 18px */
+      z-index: 100;
+      background: var(--color-bg-primary);
+      margin: -12px -12px 12px;
+      padding: 12px 12px 10px;
+      box-shadow: 0 2px 4px var(--color-shadow-ambient);
+    }
+    .sticky-header-wrapper::before {
+      content: '';
+      display: block;
+      position: absolute;
+      top: -80px; left: 0; right: 0; height: 80px;
+      background: var(--color-bg-primary);
+    }
+
+    .search-header { display: flex; flex-direction: column; gap: 8px; }
+
+    /* Row 1: title + perf */
+    .header-top {
+      display: flex; justify-content: space-between;
+      align-items: center; flex-wrap: wrap; gap: 8px;
+    }
+    .header-top h2 { font-size: 1.3em; font-weight: 600; }
+    .performance-info { display: flex; gap: 8px; align-items: center; }
+    .perf-badge {
+      font-size: 11px; padding: 3px 8px; border-radius: var(--radius-sm);
+      font-weight: 500;
+    }
+    .perf-success { background: #dcfce7; color: #166534; }
+    .perf-info-bg { background: #dbeafe; color: #1e40af; }
+    .perf-warn    { background: #fef9c3; color: #854d0e; }
+
+    /* Triage mode banner — shown when a background is selected */
+    .triage-banner {
+      display: flex; align-items: center; gap: 10px;
+      padding: 6px 10px;
+      background: #EEF2FF;
+      border: 1px solid #A5B4FC;
+      border-radius: var(--radius-sm);
+      font-size: 12px; color: #3730A3;
+      animation: fadeIn 0.2s ease;
+    }
+    .triage-banner strong { font-weight: 700; }
+    .triage-banner-actions { display: flex; gap: 6px; margin-left: auto; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+    /* Row 2: controls */
+    .search-controls {
+      display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
+    }
+    .controls-group { display: flex; gap: 5px; align-items: center; }
+    .controls-sep {
+      width: 1px; height: 22px;
+      background: var(--color-border-dark); margin: 0 2px;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 5px 11px;
+      border-radius: var(--radius-sm);
+      font-size: 12px; font-weight: 500;
+      cursor: pointer; border: 1px solid transparent;
+      transition: all var(--transition-normal);
+      font-family: inherit; white-space: nowrap; line-height: 1.4;
+    }
+    .btn:focus { outline: none; box-shadow: var(--focus-ring); }
+    .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    .btn-primary   { background: var(--color-primary);    color: #fff; border-color: var(--color-primary); }
+    .btn-primary:hover:not(:disabled)   { background: var(--color-primary-hover); border-color: var(--color-primary-hover); }
+    .btn-secondary { background: var(--color-gray-100);   color: var(--color-gray-800); border-color: var(--color-border-dark); }
+    .btn-secondary:hover:not(:disabled) { background: var(--color-gray-200); }
+    .btn-success   { background: var(--color-success);    color: #fff; border-color: var(--color-success); }
+    .btn-success:hover:not(:disabled)   { filter: brightness(0.9); }
+    .btn-danger    { background: var(--color-danger);     color: #fff; border-color: var(--color-danger); }
+    .btn-danger:hover:not(:disabled)    { filter: brightness(0.9); }
+    .btn-info      { background: var(--color-info);       color: #fff; border-color: var(--color-info); }
+    .btn-info:hover:not(:disabled)      { filter: brightness(0.9); }
+    .btn-orange    { background: var(--color-orange);     color: #fff; border-color: var(--color-orange); }
+    .btn-orange:hover:not(:disabled)    { filter: brightness(0.9); }
+    .btn-purple    { background: var(--color-purple-600); color: #fff; border-color: var(--color-purple-600); }
+    .btn-purple:hover:not(:disabled)    { filter: brightness(0.9); }
+    .btn-active-warn {
+      background: #fef9c3; color: #854d0e;
+      border-color: #fcd34d; font-weight: 600;
+    }
+    /* BG button active state */
+    .btn-bg-active {
+      background: #EEF2FF; color: #3730A3;
+      border-color: #A5B4FC; font-weight: 700;
+    }
+
+    /* Row 3: filter panel */
+    .search-filters-compact {
+      display: flex; flex-direction: column; gap: 6px;
+      padding: 8px 10px;
+      background: var(--color-bg-secondary);
+      border: 1px solid var(--color-border-light);
+      border-radius: var(--radius-sm);
+    }
+    .filter-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .filter-group-compact { display: flex; align-items: center; gap: 4px; }
+    .filter-group-compact label {
+      font-size: 11px; font-weight: 600;
+      color: var(--color-text-secondary); white-space: nowrap;
+    }
+    .filter-input-sm {
+      padding: 4px 7px; border: 1px solid var(--color-border-dark);
+      border-radius: var(--radius-sm); font-size: 12px;
+      font-family: inherit; background: white; width: 150px;
+    }
+    .filter-input-sm:focus { outline: none; border-color: var(--color-primary); box-shadow: var(--focus-ring); }
+    .filter-select-sm {
+      padding: 4px 7px; border: 1px solid var(--color-border-dark);
+      border-radius: var(--radius-sm); font-size: 12px;
+      font-family: inherit; background: white;
+    }
+
+    /* Row 4: results header */
+    .results-header {
+      display: flex; justify-content: space-between;
+      align-items: center; gap: 8px; font-size: 12px;
+    }
+    .results-summary-compact {
+      display: flex; gap: 8px; align-items: center;
+    }
+    .pagination-controls-compact { display: flex; gap: 3px; align-items: center; }
+    .page-btn {
+      padding: 2px 7px; border-radius: var(--radius-sm);
+      border: 1px solid var(--color-border-dark);
+      background: var(--color-gray-100); font-size: 11px;
+      cursor: pointer; font-family: inherit;
+    }
+    .page-btn:hover { background: var(--color-gray-200); }
+    .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* Triage stat chips */
+    .triage-chips { display: flex; gap: 5px; align-items: center; }
+    .chip {
+      font-size: 11px; font-weight: 600;
+      padding: 2px 8px; border-radius: 10px;
+    }
+    .chip-total    { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; }
+    .chip-kept     { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+    .chip-dropped  { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+    .chip-undecided{ background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; }
+
+    /* ─── Content layout (grid + sidebar) ─── */
+    .content-layout {
+      display: flex; gap: 12px; align-items: flex-start;
+    }
+    .grid-area { flex: 1; min-width: 0; }
+
+    /* ─── BackgroundUsagePanel ─── */
+    .bg-usage-panel {
+      flex-shrink: 0;
+      width: 260px;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border-dark);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      position: sticky;
+      top: calc(71px + 148px);
+      max-height: calc(100vh - 35px - 164px);
+      display: flex; flex-direction: column;
+    }
+    .bg-panel-header {
+      display: flex; align-items: center; gap: var(--spacing-sm);
+      padding: 7px 10px;
+      background: var(--color-gray-200);
+      border-bottom: 1px solid var(--color-border-dark);
+      flex-shrink: 0;
+    }
+    .bg-panel-title { font-size: 11px; font-weight: 600; flex: 1; }
+    .bg-panel-close {
+      background: none; border: none; cursor: pointer;
+      font-size: 14px; color: var(--color-text-muted);
+      line-height: 1; padding: 0 2px;
+    }
+    .bg-panel-close:hover { color: var(--color-text-primary); }
+
+    .bg-panel-filter {
+      display: block; width: 100%;
+      padding: 5px 9px;
+      border: none; border-bottom: 1px solid var(--color-border-light);
+      font-size: 11px; font-family: inherit; background: white;
+      flex-shrink: 0;
+    }
+    .bg-panel-filter:focus { outline: none; border-bottom-color: var(--color-primary); }
+
+    .bg-panel-scroll { overflow-y: auto; flex: 1; }
+
+    .bg-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    .bg-table thead {
+      position: sticky; top: 0;
+      background: var(--color-gray-100); z-index: 1;
+    }
+    .bg-table th {
+      padding: 5px 8px; text-align: left;
+      font-size: 10px; font-weight: 600; color: var(--color-text-muted);
+      border-bottom: 1px solid var(--color-border-dark);
+      cursor: pointer; user-select: none;
+    }
+    .bg-table th:hover { color: var(--color-text-primary); }
+    .bg-table th.col-uses { text-align: right; width: 44px; }
+
+    .bg-row {
+      cursor: pointer;
+      border-bottom: 1px solid var(--color-border-light);
+      transition: background var(--transition-fast);
+    }
+    .bg-row:hover { background: var(--color-gray-100); }
+    .bg-row.selected { background: #EEF2FF; }
+    .bg-row td { padding: 5px 8px; vertical-align: middle; }
+    .bg-name-cell {
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      max-width: 175px; display: block;
+      color: var(--color-text-primary);
+    }
+    .bg-row.selected .bg-name-cell { color: #3730A3; font-weight: 600; }
+    .bg-count-cell { text-align: right; color: var(--color-text-muted); white-space: nowrap; }
+    .bg-selected-mark { color: #3730A3; font-weight: 700; margin-left: 4px; }
+
+    .bg-panel-footer {
+      padding: 6px 9px; border-top: 1px solid var(--color-border-light);
+      font-size: 10px; color: var(--color-text-muted); flex-shrink: 0;
+      background: var(--color-gray-100);
+    }
+
+    /* ─── Image grid ─── */
+    .results-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+    @media (max-width: 768px) { .results-grid { grid-template-columns: 1fr; } }
+
+    /* ─── Image card ─── */
+    .image-card {
+      border: 2px solid var(--color-border-muted);
+      border-radius: var(--radius-lg);
+      overflow: hidden; cursor: pointer;
+      background: var(--color-bg-primary);
+      position: relative;
+      transition: box-shadow var(--transition-normal), border-color var(--transition-normal), opacity var(--transition-normal);
+      /* border-left: 4px solid {color} set inline per state */
+    }
+    .image-card:hover {
+      border-color: var(--color-primary);
+      box-shadow: 0 4px 12px rgba(0,123,255,0.15);
+    }
+    .image-card:hover .card-actions { opacity: 1; }
+    .image-card.state-kept:hover    { border-color: #10B981; box-shadow: 0 4px 12px rgba(16,185,129,0.2); }
+    .image-card.state-dropped       { opacity: 0.42; }
+    .image-card.state-dropped:hover { border-color: #dc3545; box-shadow: 0 4px 12px rgba(220,53,69,0.15); }
+
+    /* ─── Image container ─── */
+    .image-container {
+      position: relative; aspect-ratio: 4/3;
+      overflow: hidden; background: var(--color-gray-200);
+    }
+    .image-container img {
+      width: 100%; height: 100%;
+      object-fit: cover; display: block;
+    }
+    .image-card:hover .image-container img { object-fit: contain; }
+    .img-placeholder {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 2rem; color: var(--color-gray-300);
+    }
+
+    /* Selection overlay + checkmark */
+    .selection-overlay {
+      position: absolute; inset: 0;
+      background: rgba(40,167,69,0.2);
+      pointer-events: none;
+    }
+    .checkmark-badge {
+      position: absolute; top: 10px; left: 10px;
+      background: var(--color-success); color: white;
+      width: 44px; height: 44px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+      border: 4px solid white;
+      font-size: 22px; font-weight: bold;
+      animation: checkmarkPop 0.2s ease-out;
+      pointer-events: none;
+    }
+    @keyframes checkmarkPop {
+      0%   { transform: scale(0); }
+      50%  { transform: scale(1.1); }
+      100% { transform: scale(1); }
+    }
+
+    /* Drop overlay (triage mode) */
+    .drop-overlay {
+      position: absolute; inset: 0;
+      background: rgba(220,53,69,0.1);
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none;
+      transition: opacity var(--transition-normal);
+    }
+    .state-dropped .drop-overlay { opacity: 1; }
+    .drop-stamp {
+      background: var(--color-danger); color: white;
+      font-size: 12px; font-weight: 700;
+      padding: 4px 12px; border-radius: 10px;
+      transform: rotate(-8deg); box-shadow: var(--shadow-sm);
+    }
+
+    /* Floating action buttons (reveal on hover) */
+    .card-actions {
+      position: absolute; top: 8px; right: 8px;
+      display: flex; gap: 4px; opacity: 0;
+      transition: opacity var(--transition-normal);
+    }
+    .card-action-btn {
+      width: 28px; height: 28px; border-radius: 50%;
+      border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; box-shadow: var(--shadow-sm);
+      transition: transform var(--transition-fast);
+    }
+    .card-action-btn:hover { transform: scale(1.12); }
+    .cab-keep    { background: var(--color-success); color: white; }
+    .cab-drop    { background: var(--color-danger);  color: white; }
+    .cab-restore { background: var(--color-gray-500); color: white; font-size: 11px; }
+
+    /* ─── Card footer ─── */
+    .card-footer {
+      padding: 8px 10px 7px;
+      display: flex; flex-direction: column; gap: 5px;
+    }
+    .footer-top {
+      display: flex; align-items: center;
+      justify-content: space-between; gap: 6px;
+    }
+    .state-badge {
+      font-size: 11px; font-weight: 600;
+      padding: 3px 8px; border-radius: 10px;
+      white-space: nowrap;
+    }
+
+    /* Normal state badges */
+    .badge-undecided { background: #F1F5F9; color: #64748B; border: 1px solid #CBD5E1; }
+    .badge-psd       { background: #EEF2FF; color: #3730A3; border: 1px solid #A5B4FC; }
+    .badge-censored  { background: #FDF2F8; color: #9D174D; border: 1px solid #F9A8D4; }
+    .badge-scheduled { background: #ECFDF5; color: #065F46; border: 1px solid #6EE7B7; }
+    .badge-missing   { background: #FFFBEB; color: #92400E; border: 1px solid #FCD34D; }
+
+    /* Triage-mode coverage badges (same palette, new meanings) */
+    .badge-cov-high  { background: #EEF2FF; color: #3730A3; border: 1px solid #A5B4FC; } /* has PSDs → consider dropping */
+    .badge-cov-aug   { background: #FFFBEB; color: #92400E; border: 1px solid #FCD34D; } /* aug but no PSDs → keep */
+    .badge-cov-none  { background: #F1F5F9; color: #64748B; border: 1px solid #CBD5E1; } /* no coverage */
+    .badge-kept      { background: #ECFDF5; color: #065F46; border: 1px solid #6EE7B7; }
+    .badge-dropped   { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+
+    .eliminate-btn {
+      background: none; border: 1px solid var(--color-border-muted);
+      border-radius: var(--radius-sm); color: var(--color-danger);
+      font-size: 11px; font-weight: 600;
+      padding: 2px 7px; cursor: pointer;
+      transition: background var(--transition-fast), border-color var(--transition-fast);
+      flex-shrink: 0; font-family: inherit;
+    }
+    .eliminate-btn:hover { background: #fee2e2; border-color: var(--color-danger); }
+    .eliminate-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    .action-btn {
+      width: 100%; padding: 6px 10px;
+      border: none; border-radius: 5px;
+      font-size: 12px; font-weight: 600; cursor: pointer;
+      transition: filter var(--transition-fast);
+      font-family: inherit;
+    }
+    .action-btn:hover:not(:disabled) { filter: brightness(0.88); }
+    .action-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .action-blue   { background: var(--color-primary); color: white; }
+    .action-green  { background: var(--color-success); color: white; }
+    .action-red    { background: var(--color-danger);  color: white; }
+    .action-gray   { background: var(--color-gray-500); color: white; }
+    .action-amber  { background: var(--color-amber);   color: white; }
+
+    /* Triage actions row (two side-by-side) */
+    .triage-action-row {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 5px;
+    }
+
+    .footer-links { display: flex; flex-direction: column; gap: 2px; }
+    .filter-link {
+      background: none; border: none; padding: 0;
+      font-size: 10px; color: var(--color-primary);
+      text-align: left; cursor: pointer;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      max-width: 100%; text-decoration: underline;
+      font-family: inherit;
+    }
+    .filter-link:hover { color: var(--color-primary-hover); }
+
+    /* ─── Loading / empty ─── */
+    .loading-indicator {
+      display: flex; flex-direction: column;
+      align-items: center; padding: 48px 20px;
+      gap: 12px; color: var(--color-text-secondary);
+    }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 4px solid var(--color-gray-200);
+      border-top-color: var(--color-primary);
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .no-results {
+      text-align: center; padding: 60px 20px;
+      color: var(--color-text-secondary);
+    }
+    .no-results-icon { font-size: 3rem; margin-bottom: 16px; }
+    .no-results h3 { margin: 0 0 8px; color: var(--color-text-primary); font-size: 1rem; }
+    .no-results p  { font-size: 0.875rem; }
+
+    /* ─── Toast ─── */
+    .toast-wrap {
+      position: fixed; bottom: 20px; right: 20px;
+      display: flex; flex-direction: column; gap: 8px; z-index: 9000;
+    }
+    .toast {
+      padding: 10px 14px; border-radius: var(--radius-md);
+      font-size: 13px; font-weight: 500;
+      box-shadow: var(--shadow-lg);
+      animation: toastIn 0.18s ease; max-width: 320px;
+    }
+    @keyframes toastIn { from { transform: translateX(12px); opacity: 0; } to { transform: none; opacity: 1; } }
+    .toast-info    { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; }
+    .toast-success { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+    .toast-warning { background: #fef9c3; color: #854d0e; border: 1px solid #fcd34d; }
+  </style>
+</head>
+<body>
+
+<!-- App nav -->
+<nav class="app-nav">
+  <button class="nav-tab">File Browser</button>
+  <button class="nav-tab">Tasks</button>
+  <button class="nav-tab active">Optimized Search</button>
+  <button class="nav-tab">Background Studio</button>
+  <div class="nav-spacer"></div>
+  <span class="nav-prototype-badge">Prototype</span>
+</nav>
+
+<!-- Config banner -->
+<div class="config-banner">
+  <label style="display:flex; align-items:center; gap:5px; cursor:pointer; font-weight:600;">
+    <input type="checkbox" id="demoToggle" checked style="cursor:pointer;" />
+    Demo mode
+  </label>
+  <span style="color:#92400e; opacity:0.5;">|</span>
+  ⚙️ API:
+  <input type="text" id="apiInput" value="http://10.0.0.92:8080" disabled />
+  <span style="opacity:.75; font-style:italic;">Uncheck Demo mode to use real API (requires HTTP server for CORS)</span>
+</div>
+<!-- Demo banner -->
+<div id="demoBanner" style="display:flex; align-items:center; gap:8px; padding:5px 12px; background:#EEF2FF; border-bottom:1px solid #A5B4FC; font-size:11px; color:#3730A3;">
+  🎭 <strong>Demo mode</strong> — showing mock data. Uncheck "Demo mode" above and serve via HTTP to connect to the real API.
+</div>
+
+<div class="optimized-augmented-container">
+
+  <!-- ── Sticky header (AugmentedSearchPanel) ── -->
+  <div class="sticky-header-wrapper">
+    <div class="search-header">
+
+      <!-- Row 1: title + perf -->
+      <div class="header-top">
+        <h2>Optimized Augmented Image Search</h2>
+        <div class="performance-info" id="perfInfo"></div>
+      </div>
+
+      <!-- Triage banner — visible when background is selected -->
+      <div class="triage-banner" id="triageBanner" style="display:none">
+        <span>🎯 Triage mode — background: <strong id="triageBannerBg"></strong></span>
+        <span id="triageCovStatus" style="color:#4f46e5; font-size:11px;"></span>
+        <div class="triage-banner-actions">
+          <button class="btn btn-success" style="padding:3px 10px; font-size:11px;" onclick="keepAll()">✓ Keep All</button>
+          <button class="btn btn-secondary" style="padding:3px 10px; font-size:11px; color:var(--color-danger);" onclick="dropAll()">🗑 Drop All</button>
+          <button class="btn btn-secondary" style="padding:3px 10px; font-size:11px;" onclick="clearBgFilter()">✕ Exit Triage</button>
+        </div>
+      </div>
+
+      <!-- Row 2: control buttons -->
+      <div class="search-controls">
+        <div class="controls-group">
+          <button class="btn btn-orange" title="Rebuild image cache">🔄 Rebuild Cache</button>
+        </div>
+        <div class="controls-sep"></div>
+        <div class="controls-group">
+          <button class="btn btn-secondary" id="toggleFiltersBtn" onclick="toggleFilters()">▼ Filters</button>
+          <button class="btn btn-primary" onclick="doSearch()">🔍 Search</button>
+          <button class="btn btn-secondary" onclick="clearSearch()">✕ Clear</button>
+        </div>
+        <div class="controls-sep"></div>
+        <div class="controls-group">
+          <button class="btn btn-secondary" id="pageSize25" onclick="setPageSize(25)">25</button>
+          <button class="btn btn-secondary" id="pageSize50" onclick="setPageSize(50)">50</button>
+          <button class="btn btn-secondary btn-active-warn" id="pageSize100" onclick="setPageSize(100)">100</button>
+          <select class="filter-select-sm" id="sortOrder">
+            <option value="desc">↓ Latest</option>
+            <option value="asc">↑ Oldest</option>
+          </select>
+        </div>
+        <div class="controls-sep"></div>
+        <div class="controls-group">
+          <button class="btn btn-info">✓ All</button>
+          <button class="btn btn-danger" style="background:none; color:var(--color-danger); border-color:var(--color-border-dark);">✗ Clear</button>
+          <button class="btn btn-success">➕ Task</button>
+          <button class="btn btn-purple">🎨 BG</button>
+          <button class="btn btn-danger">🗑️ Trash</button>
+        </div>
+        <div class="controls-sep"></div>
+        <!-- 📊 Backgrounds button — key integration point -->
+        <div class="controls-group">
+          <button class="btn" id="bgToggleBtn"
+                  onclick="toggleBgPanel()"
+                  style="background:var(--color-gray-100); color:var(--color-gray-800); border-color:var(--color-border-dark);">
+            📊 Backgrounds
+          </button>
+        </div>
+      </div>
+
+      <!-- Row 3: filter panel (collapsible) -->
+      <div class="search-filters-compact" id="filtersPanel" style="display:none">
+        <div class="filter-row">
+          <div class="filter-group-compact">
+            <label>Input:</label>
+            <input type="text" class="filter-input-sm" id="inputSearch" placeholder="input name…" onkeydown="if(event.key==='Enter')doSearch()" />
+          </div>
+          <div class="filter-group-compact">
+            <label>Background:</label>
+            <input type="text" class="filter-input-sm" id="bgSearch" placeholder="background name…" onkeydown="if(event.key==='Enter')doSearch()" />
+          </div>
+          <div class="filter-group-compact">
+            <label>Directory:</label>
+            <input type="text" class="filter-input-sm" id="dirFilter" placeholder="directory…" onkeydown="if(event.key==='Enter')doSearch()" />
+          </div>
+          <div class="filter-group-compact">
+            <label>PSD:</label>
+            <select class="filter-select-sm" id="psdFilter">
+              <option value="">All</option>
+              <option value="with">With PSD</option>
+              <option value="without">No PSD</option>
+            </select>
+          </div>
+          <div class="filter-group-compact">
+            <label>Patreon:</label>
+            <select class="filter-select-sm">
+              <option>All</option>
+              <option>Posted</option>
+              <option>Not Posted</option>
+            </select>
+          </div>
+          <div class="filter-group-compact">
+            <label>Inputs:</label>
+            <select class="filter-select-sm" style="width:50px">
+              <option>gt</option><option>eq</option><option>lt</option>
+            </select>
+            <input type="number" class="filter-input-sm" style="width:60px" placeholder="0" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 4: results summary -->
+      <div class="results-header">
+        <div class="results-summary-compact" id="resultsSummary">
+          <span style="color:var(--color-text-muted);">Enter filters above and press Search</span>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <div class="triage-chips" id="triageChips" style="display:none"></div>
+          <div class="pagination-controls-compact" id="paginationControls" style="display:none">
+            <button class="page-btn" disabled>«</button>
+            <button class="page-btn" disabled>‹</button>
+            <span style="font-size:11px; padding:0 4px;">Page 1 / 1</span>
+            <button class="page-btn" disabled>›</button>
+            <button class="page-btn" disabled>»</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Content: grid + bg sidebar ── -->
+  <div class="content-layout">
+
+    <!-- Image grid -->
+    <div class="grid-area">
+      <div id="gridContent">
+        <div class="no-results">
+          <div class="no-results-icon">🔍</div>
+          <h3>No images loaded</h3>
+          <p>Enter a directory or other filters and press Search.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- BackgroundUsagePanel -->
+    <div class="bg-usage-panel" id="bgPanel" style="display:none">
+      <div class="bg-panel-header">
+        <span class="bg-panel-title">📊 Backgrounds <span id="bgPanelCount" style="font-weight:400; color:var(--color-text-muted)"></span></span>
+        <button class="bg-panel-close" onclick="toggleBgPanel()" title="Close">✕</button>
+      </div>
+      <input type="text" class="bg-panel-filter" id="bgPanelFilter"
+             placeholder="Filter backgrounds…" oninput="renderBgRows()" />
+      <div class="bg-panel-scroll">
+        <table class="bg-table">
+          <thead>
+            <tr>
+              <th onclick="sortBg('name')">Name <span id="sortNameIcon">↕</span></th>
+              <th class="col-uses" onclick="sortBg('count')">Uses <span id="sortCountIcon">↓</span></th>
+            </tr>
+          </thead>
+          <tbody id="bgTableBody"></tbody>
+        </table>
+      </div>
+      <div class="bg-panel-footer" id="bgPanelFooter"></div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- Toasts -->
+<div class="toast-wrap" id="toasts"></div>
+
+<script>
+// ══════════════════════════════════════════════════════
+// Config
+// ══════════════════════════════════════════════════════
+let API = 'http://10.0.0.92:8080';
+let DEMO_MODE = true; // starts true so file:// works out of the box
+
+document.getElementById('apiInput').addEventListener('change', e => {
+  API = e.target.value.trim().replace(/\/$/, '');
+});
+document.getElementById('demoToggle').addEventListener('change', e => {
+  DEMO_MODE = e.target.checked;
+  document.getElementById('apiInput').disabled = DEMO_MODE;
+  document.getElementById('demoBanner').style.display = DEMO_MODE ? '' : 'none';
+});
+
+// ══════════════════════════════════════════════════════
+// Mock data — realistic stand-in for 10.0.0.92:8080
+// ══════════════════════════════════════════════════════
+const MOCK_BACKGROUNDS = [
+  { background_name: 'bg-forest-path',       usage_count: 18, is_missing_background: false },
+  { background_name: 'bg-studio-white',      usage_count: 24, is_missing_background: false },
+  { background_name: 'bg-sunset-beach',      usage_count: 11, is_missing_background: false },
+  { background_name: 'bg-city-rooftop',      usage_count: 9,  is_missing_background: false },
+  { background_name: 'bg-marble-floor',      usage_count: 15, is_missing_background: false },
+  { background_name: 'bg-neon-alley',        usage_count: 7,  is_missing_background: false },
+  { background_name: 'bg-mountain-snow',     usage_count: 13, is_missing_background: false },
+  { background_name: 'bg-abandoned-factory', usage_count: 5,  is_missing_background: false },
+  { background_name: 'bg-garden-bloom',      usage_count: 20, is_missing_background: false },
+  { background_name: 'bg-desert-dunes',      usage_count: 8,  is_missing_background: false },
+  { background_name: 'bg-old-library',       usage_count: 6,  is_missing_background: true  },
+];
+
+// 12 input images for the "2026-05 Fred" session with varied coverage
+const MOCK_INPUTS = [
+  { name: 'fred_001', psdCount: 3, total: 5 },  // well covered — drop candidate
+  { name: 'fred_002', psdCount: 2, total: 4 },  // covered — drop candidate
+  { name: 'fred_003', psdCount: 0, total: 3 },  // aug but no PSDs — keep
+  { name: 'fred_004', psdCount: 1, total: 2 },  // some coverage
+  { name: 'fred_005', psdCount: 0, total: 2 },  // aug but no PSDs — keep
+  { name: 'fred_006', psdCount: 4, total: 6 },  // very well covered — strong drop
+  { name: 'fred_007', psdCount: 0, total: 1 },  // single aug, no PSD — keep
+  { name: 'fred_008', psdCount: 2, total: 3 },  // covered
+  { name: 'fred_009', psdCount: 0, total: 0 },  // no coverage at all
+  { name: 'fred_010', psdCount: 1, total: 4 },  // some coverage
+  { name: 'fred_011', psdCount: 0, total: 2 },  // aug but no PSDs
+  { name: 'fred_012', psdCount: 3, total: 3 },  // all PSDs — strong drop
+];
+
+// Picsum seeds produce stable placeholder images
+const PICSUM_SEEDS = [10,20,30,40,50,60,70,80,90,100,110,120];
+
+function mockAugmentedImages(bgName) {
+  return MOCK_INPUTS.map((inp, i) => ({
+    name:            `${inp.name}-${bgName}.png`,
+    path:            `/portfolio/2026-05 Fred/${inp.name}-${bgName}.png`,
+    inputName:       inp.name,
+    inputPath:       `/portfolio/2026-05 Fred/${inp.name}.jpg`,
+    backgroundName:  bgName,
+    backgroundPath:  `/backgrounds/${bgName}.jpg`,
+    directory:       '2026-05 Fred',
+    version:         1,
+    hasPsd:          inp.psdCount > 0,
+    hasPatreonPost:  false,
+    hasCensored:     false,
+    missingPng:      false,
+    _picsumSeed:     PICSUM_SEEDS[i],
+  }));
+}
+
+// For coverage map: aggregate all augmented in directory
+function mockAllAugmentedForDirectory() {
+  const all = [];
+  for (const bg of MOCK_BACKGROUNDS) {
+    for (const inp of MOCK_INPUTS) {
+      // Each input has psdCount PSDs spread across backgrounds
+      const hasPsd = all.filter(x => x.inputName === inp.name && x.hasPsd).length < inp.psdCount;
+      all.push({ inputName: inp.name, backgroundName: bg.background_name, hasPsd });
+    }
+  }
+  return all;
+}
+
+function mockImgSrc(item) {
+  // Use picsum for stable placeholder images
+  const seed = item._picsumSeed ?? 42;
+  return `https://picsum.photos/seed/${seed}/400/300`;
+}
+
+// ── Mock API responses ──
+function mockApiFetch(path) {
+  if (path.includes('/background-statistics')) {
+    return Promise.resolve({ background_statistics: MOCK_BACKGROUNDS, summary: { total_backgrounds: MOCK_BACKGROUNDS.length } });
+  }
+  if (path.includes('/search-augmented')) {
+    const params = new URLSearchParams(path.split('?')[1] ?? '');
+    const bgFilter  = params.get('background_search') ?? '';
+    const dirFilter = params.get('directory') ?? '';
+    const inpFilter = params.get('input_search') ?? '';
+
+    // Directory coverage scan (no bg filter)
+    if (dirFilter && !bgFilter) {
+      const all = mockAllAugmentedForDirectory();
+      return Promise.resolve({ results: all, total: all.length });
+    }
+
+    // Filtered view
+    const bg = bgFilter || MOCK_BACKGROUNDS[0].background_name;
+    let results = mockAugmentedImages(bg);
+    if (inpFilter) results = results.filter(r => r.inputName.includes(inpFilter));
+    return new Promise(r => setTimeout(() => r({ results, total: results.length }), 180));
+  }
+  return Promise.reject(new Error('Unknown mock endpoint'));
+}
+
+// ══════════════════════════════════════════════════════
+// State — mirrors OptimizedAugmentedView.svelte
+// ══════════════════════════════════════════════════════
+let augmentedImages  = [];   // current page results
+let totalCount       = 0;
+let searchTime       = 0;
+
+// Background panel
+let showBgPanel      = false;
+let bgStats          = [];    // from /background-statistics
+let filteredBgStats  = [];
+let bgSortBy         = 'count';
+let bgSortOrder      = 'desc';
+
+// Triage — new additions
+let selectedBgName   = '';   // set when user clicks a bg row
+let coverageMap      = {};   // inputName → { total, psdCount } — loaded from directory scan
+let coverageLoading  = false;
+let dropped          = new Set();
+let kept             = new Set();
+
+// Search params
+let inputSearch  = '';
+let bgSearch     = '';
+let dirFilter    = '';
+let psdFilter    = '';
+let pageSize     = 100;
+let sortOrder    = 'desc';
+let filtersOpen  = false;
+
+// ══════════════════════════════════════════════════════
+// Helpers
+// ══════════════════════════════════════════════════════
+async function apiFetch(path) {
+  if (DEMO_MODE) return mockApiFetch(path);
+  const r = await fetch(API + path);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+function imgSrc(path, item) {
+  if (DEMO_MODE && item?._picsumSeed) return mockImgSrc(item);
+  return path ? `${API}/api/image?path=${encodeURIComponent(path)}` : '';
+}
+function safe(s)       { return 'c_' + s.replace(/[^a-zA-Z0-9]/g, '_'); }
+function esc(s)        { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function escJs(s)      { return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+
+// ══════════════════════════════════════════════════════
+// Search
+// ══════════════════════════════════════════════════════
+async function doSearch() {
+  inputSearch = document.getElementById('inputSearch').value.trim();
+  bgSearch    = document.getElementById('bgSearch').value.trim();
+  dirFilter   = document.getElementById('dirFilter').value.trim();
+  psdFilter   = document.getElementById('psdFilter').value;
+
+  // If bg filter changed via text input, clear triage mode
+  if (bgSearch !== selectedBgName) clearTriageState();
+
+  showLoading();
+  const t0 = performance.now();
+
+  try {
+    const params = new URLSearchParams({ page: 1, page_size: pageSize, sort_order: sortOrder });
+    if (inputSearch) params.append('input_search', inputSearch);
+    if (bgSearch)    params.append('background_search', bgSearch);
+    if (dirFilter)   params.append('directory', dirFilter);
+    if (psdFilter)   params.append('psd_filter', psdFilter);
+
+    const data = await apiFetch(`/api/optimized-augmentation/search-augmented?${params}`);
+    searchTime = Math.round(performance.now() - t0);
+
+    augmentedImages = data.results ?? data.images ?? (Array.isArray(data) ? data : []);
+    totalCount = data.total ?? augmentedImages.length;
+
+    updatePerfBadges();
+    renderGrid();
+    updateResultsSummary();
+
+    // If triage mode is active, refresh coverage if directory changed
+    if (selectedBgName && dirFilter && !coverageLoading) {
+      loadCoverageMap(dirFilter);
+    }
+
+  } catch(err) {
+    searchTime = Math.round(performance.now() - t0);
+    document.getElementById('gridContent').innerHTML = `
+      <div class="no-results">
+        <div class="no-results-icon">⚠️</div>
+        <h3 style="color:var(--color-danger)">Search error</h3>
+        <p>${esc(err.message)}</p>
+      </div>`;
+    toast(err.message, 'warning');
+  }
+}
+
+function showLoading() {
+  document.getElementById('gridContent').innerHTML = `
+    <div class="loading-indicator">
+      <div class="spinner"></div>
+      <span style="font-size:13px; color:var(--color-text-muted)">Searching…</span>
+    </div>`;
+}
+
+function clearSearch() {
+  document.getElementById('inputSearch').value = '';
+  document.getElementById('bgSearch').value = '';
+  document.getElementById('dirFilter').value = '';
+  document.getElementById('psdFilter').value = '';
+  clearTriageState();
+  augmentedImages = []; totalCount = 0;
+  document.getElementById('perfInfo').innerHTML = '';
+  document.getElementById('gridContent').innerHTML = `<div class="no-results"><div class="no-results-icon">🔍</div><h3>No images loaded</h3><p>Enter filters and press Search.</p></div>`;
+  updateResultsSummary();
+}
+
+function updatePerfBadges() {
+  document.getElementById('perfInfo').innerHTML = `
+    <span class="perf-badge perf-success">⚡ ${searchTime}ms</span>
+    <span class="perf-badge perf-info-bg">${totalCount.toLocaleString()} results</span>`;
+}
+
+// ══════════════════════════════════════════════════════
+// Background panel — BackgroundUsagePanel behaviour
+// ══════════════════════════════════════════════════════
+async function toggleBgPanel() {
+  showBgPanel = !showBgPanel;
+  const panel  = document.getElementById('bgPanel');
+  const btn    = document.getElementById('bgToggleBtn');
+
+  if (showBgPanel) {
+    panel.style.display = 'flex';
+    btn.className = 'btn btn-bg-active';
+    btn.textContent = '📊 Backgrounds';
+    await loadBgStats();
+  } else {
+    panel.style.display = 'none';
+    btn.className = 'btn';
+    btn.style.cssText = 'background:var(--color-gray-100); color:var(--color-gray-800); border-color:var(--color-border-dark);';
+    btn.textContent = '📊 Backgrounds';
+  }
+}
+
+async function loadBgStats() {
+  document.getElementById('bgTableBody').innerHTML = `<tr><td colspan="2" style="padding:12px; text-align:center"><div class="spinner" style="width:20px;height:20px;border-width:3px;margin:0 auto"></div></td></tr>`;
+  try {
+    const data = await apiFetch(`/api/optimized-augmentation/background-statistics?sort_by=usage_count&sort_order=desc&page_size=300`);
+    bgStats = (data.background_statistics ?? data.results ?? []).map(b => ({
+      name:    b.background_name ?? b.name ?? '',
+      count:   b.usage_count ?? b.count ?? 0,
+      missing: b.is_missing_background ?? false
+    }));
+    filteredBgStats = [...bgStats];
+    document.getElementById('bgPanelCount').textContent = `(${bgStats.length})`;
+    document.getElementById('bgPanelFooter').textContent = `${bgStats.length} backgrounds · click a row to filter`;
+    renderBgRows();
+  } catch(err) {
+    document.getElementById('bgTableBody').innerHTML = `<tr><td colspan="2" style="padding:10px 8px; color:var(--color-danger); font-size:11px">Error: ${esc(err.message)}</td></tr>`;
+  }
+}
+
+function sortBg(field) {
+  if (bgSortBy === field) {
+    bgSortOrder = bgSortOrder === 'asc' ? 'desc' : 'asc';
+  } else {
+    bgSortBy = field;
+    bgSortOrder = field === 'count' ? 'desc' : 'asc';
+  }
+  document.getElementById('sortNameIcon').textContent  = bgSortBy === 'name'  ? (bgSortOrder === 'asc' ? '↑' : '↓') : '↕';
+  document.getElementById('sortCountIcon').textContent = bgSortBy === 'count' ? (bgSortOrder === 'asc' ? '↑' : '↓') : '↕';
+  filteredBgStats.sort((a,b) => {
+    const cmp = bgSortBy === 'name' ? a.name.localeCompare(b.name) : a.count - b.count;
+    return bgSortOrder === 'asc' ? cmp : -cmp;
+  });
+  renderBgRows();
+}
+
+function renderBgRows() {
+  const q = document.getElementById('bgPanelFilter').value.trim().toLowerCase();
+  filteredBgStats = q
+    ? bgStats.filter(b => b.name.toLowerCase().includes(q))
+    : [...bgStats];
+
+  // re-sort
+  filteredBgStats.sort((a,b) => {
+    const cmp = bgSortBy === 'name' ? a.name.localeCompare(b.name) : a.count - b.count;
+    return bgSortOrder === 'asc' ? cmp : -cmp;
+  });
+
+  const tbody = document.getElementById('bgTableBody');
+  if (!filteredBgStats.length) {
+    tbody.innerHTML = `<tr><td colspan="2" style="padding:12px 8px; text-align:center; color:var(--color-text-muted); font-size:11px">No matches</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = filteredBgStats.map(bg => {
+    const sel  = bg.name === selectedBgName ? ' selected' : '';
+    const mark = bg.name === selectedBgName ? '<span class="bg-selected-mark">←</span>' : '';
+    return `<tr class="bg-row${sel}" onclick="selectBackground('${escJs(bg.name)}')">
+      <td><span class="bg-name-cell" title="${esc(bg.name)}">${esc(bg.name)}</span></td>
+      <td class="bg-count-cell">${bg.count}${mark}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════
+// Background selection → triage mode
+// The key new behaviour: clicking a background row:
+//   1. Sets background_search filter (same as before)
+//   2. Keeps panel open (changed from current close-on-select)
+//   3. Loads coverage map for this directory
+//   4. Cards gain coverage badges + Keep/Drop actions
+// ══════════════════════════════════════════════════════
+async function selectBackground(bgName) {
+  // Toggle: clicking the same background again exits triage mode
+  if (selectedBgName === bgName) {
+    clearBgFilter();
+    return;
+  }
+
+  selectedBgName = bgName;
+  bgSearch = bgName;
+  document.getElementById('bgSearch').value = bgName;
+
+  // Show triage banner
+  document.getElementById('triageBannerBg').textContent = bgName;
+  document.getElementById('triageBanner').style.display = 'flex';
+
+  // Reset triage decisions
+  dropped.clear(); kept.clear();
+
+  // Run search filtered to this background
+  await doSearch();
+
+  // Re-render bg rows to update selected highlight
+  renderBgRows();
+
+  // Load coverage map for the directory (for coverage badges)
+  const dir = document.getElementById('dirFilter').value.trim();
+  if (dir) {
+    loadCoverageMap(dir);
+  } else {
+    // Load coverage from all images in current result set
+    buildCoverageFromResults();
+  }
+
+  updateTriageChips();
+}
+
+async function loadCoverageMap(dir) {
+  // Fetch ALL augmented in this directory (no background filter)
+  // to compute per-input coverage across all backgrounds
+  coverageLoading = true;
+  document.getElementById('triageCovStatus').textContent = '⏳ Loading coverage…';
+  coverageMap = {};
+
+  try {
+    let page = 1, pageSize = 500, fetched = 0, available = Infinity;
+    while (fetched < available) {
+      const data = await apiFetch(
+        `/api/optimized-augmentation/search-augmented?directory=${encodeURIComponent(dir)}&page=${page}&page_size=${pageSize}`
+      );
+      const items = data.results ?? data.images ?? (Array.isArray(data) ? data : []);
+      if (page === 1) available = data.total ?? items.length;
+      if (!items.length) break;
+
+      for (const item of items) {
+        const key = item.inputName ?? item.input_name ?? '';
+        if (!key) continue;
+        if (!coverageMap[key]) coverageMap[key] = { total: 0, psdCount: 0 };
+        coverageMap[key].total++;
+        if (item.hasPsd ?? item.has_psd) coverageMap[key].psdCount++;
+      }
+      fetched += items.length;
+      if (items.length < pageSize) break;
+      page++;
+    }
+
+    const nInputs = Object.keys(coverageMap).length;
+    const nWithPsd = Object.values(coverageMap).filter(c => c.psdCount > 0).length;
+    document.getElementById('triageCovStatus').textContent =
+      `Coverage loaded: ${nInputs} inputs, ${nWithPsd} with PSDs`;
+
+    // Re-render grid now that we have coverage data
+    renderGrid();
+
+  } catch(err) {
+    document.getElementById('triageCovStatus').textContent = '⚠️ Coverage unavailable';
+  } finally {
+    coverageLoading = false;
+  }
+}
+
+function buildCoverageFromResults() {
+  // Fallback: build coverage from whatever is loaded in augmentedImages
+  // (less accurate — only covers the current page/filter)
+  coverageMap = {};
+  for (const item of augmentedImages) {
+    const key = item.inputName ?? item.input_name ?? '';
+    if (!key) continue;
+    if (!coverageMap[key]) coverageMap[key] = { total: 0, psdCount: 0 };
+    coverageMap[key].total++;
+    if (item.hasPsd ?? item.has_psd) coverageMap[key].psdCount++;
+  }
+  document.getElementById('triageCovStatus').textContent =
+    `Coverage (current page only — add Directory filter for full coverage)`;
+  renderGrid();
+}
+
+function clearBgFilter() {
+  selectedBgName = '';
+  bgSearch = '';
+  document.getElementById('bgSearch').value = '';
+  document.getElementById('triageBanner').style.display = 'none';
+  document.getElementById('triageCovStatus').textContent = '';
+  clearTriageState();
+  renderBgRows();
+  doSearch();
+}
+
+function clearTriageState() {
+  selectedBgName = '';
+  coverageMap = {};
+  dropped.clear(); kept.clear();
+  document.getElementById('triageBanner').style.display = 'none';
+  document.getElementById('triageChips').style.display = 'none';
+}
+
+// ══════════════════════════════════════════════════════
+// Grid render
+// ══════════════════════════════════════════════════════
+function renderGrid() {
+  if (!augmentedImages.length) {
+    document.getElementById('gridContent').innerHTML = `
+      <div class="no-results">
+        <div class="no-results-icon">🔍</div>
+        <h3>No results</h3>
+        <p>Try adjusting your filters.</p>
+      </div>`;
+    return;
+  }
+  const cards = augmentedImages.map(item => renderCard(item)).join('');
+  document.getElementById('gridContent').innerHTML = `<div class="results-grid">${cards}</div>`;
+}
+
+function renderCard(item) {
+  const inputName = item.inputName ?? item.input_name ?? 'unknown';
+  const dir       = item.directory ?? '';
+  const bgName    = item.backgroundName ?? item.background_name ?? '';
+  const path      = item.path ?? '';
+  const hasPsd    = item.hasPsd ?? item.has_psd ?? false;
+  const cid       = safe(inputName + '_' + (item.name ?? ''));
+
+  const inTriageMode = !!selectedBgName;
+  const cov = coverageMap[inputName] ?? null;
+
+  const isDropped = dropped.has(inputName);
+  const isKept    = kept.has(inputName);
+
+  // ── Determine state (border color, badge) ──
+  let borderColor, badgeClass, badgeText, primaryAction, fabHtml;
+
+  if (inTriageMode) {
+    // Coverage-driven state
+    if (isDropped) {
+      borderColor = '#dc3545';
+      badgeClass  = 'badge-dropped';
+      badgeText   = '🗑 Dropped';
+      primaryAction = `<button class="action-btn action-gray" onclick="restoreItem('${escJs(inputName)}')">↩ Restore</button>`;
+      fabHtml = `<button class="card-action-btn cab-restore" onclick="restoreItem('${escJs(inputName)}')" title="Restore">↩</button>`;
+    } else if (isKept) {
+      borderColor = '#10B981';
+      badgeClass  = 'badge-kept';
+      badgeText   = cov ? `✓ Kept · ${cov.total} aug` : '✓ Kept';
+      primaryAction = `<div class="triage-action-row">
+        <button class="action-btn action-gray" onclick="unkeptItem('${escJs(inputName)}')">↺ Unkept</button>
+        <button class="action-btn action-red"  onclick="dropItem('${escJs(inputName)}')">🗑 Drop</button>
+      </div>`;
+      fabHtml = `<button class="card-action-btn cab-drop" onclick="dropItem('${escJs(inputName)}')" title="Drop">🗑</button>`;
+    } else if (cov && cov.psdCount > 0) {
+      // Has PSDs across other backgrounds — prime drop candidate
+      borderColor = '#6366F1';
+      badgeClass  = 'badge-cov-high';
+      badgeText   = `${cov.total} aug · ${cov.psdCount} PSD${cov.psdCount !== 1 ? 's' : ''}`;
+      primaryAction = `<div class="triage-action-row">
+        <button class="action-btn action-green" onclick="keepItem('${escJs(inputName)}')">✓ Keep</button>
+        <button class="action-btn action-red"   onclick="dropItem('${escJs(inputName)}')">🗑 Drop</button>
+      </div>`;
+      fabHtml = `<button class="card-action-btn cab-keep" onclick="keepItem('${escJs(inputName)}')" title="Keep">✓</button>
+                 <button class="card-action-btn cab-drop" onclick="dropItem('${escJs(inputName)}')" title="Drop">🗑</button>`;
+    } else if (cov && cov.total > 0) {
+      // Augmented but no PSDs — needs work, lean towards keeping
+      borderColor = '#F59E0B';
+      badgeClass  = 'badge-cov-aug';
+      badgeText   = `${cov.total} aug · No PSDs`;
+      primaryAction = `<div class="triage-action-row">
+        <button class="action-btn action-green" onclick="keepItem('${escJs(inputName)}')">✓ Keep</button>
+        <button class="action-btn action-red"   onclick="dropItem('${escJs(inputName)}')">🗑 Drop</button>
+      </div>`;
+      fabHtml = `<button class="card-action-btn cab-keep" onclick="keepItem('${escJs(inputName)}')" title="Keep">✓</button>
+                 <button class="card-action-btn cab-drop" onclick="dropItem('${escJs(inputName)}')" title="Drop">🗑</button>`;
+    } else {
+      // No coverage data loaded yet, or genuinely no coverage
+      borderColor = '#94A3B8';
+      badgeClass  = cov ? 'badge-cov-none' : 'badge-undecided';
+      badgeText   = cov ? 'No coverage' : 'Undecided';
+      primaryAction = `<div class="triage-action-row">
+        <button class="action-btn action-green" onclick="keepItem('${escJs(inputName)}')">✓ Keep</button>
+        <button class="action-btn action-red"   onclick="dropItem('${escJs(inputName)}')">🗑 Drop</button>
+      </div>`;
+      fabHtml = `<button class="card-action-btn cab-keep" onclick="keepItem('${escJs(inputName)}')" title="Keep">✓</button>
+                 <button class="card-action-btn cab-drop" onclick="dropItem('${escJs(inputName)}')" title="Drop">🗑</button>`;
+    }
+  } else {
+    // Normal mode — existing state system
+    if (item.missingPng ?? item.missing_png) {
+      borderColor = '#F59E0B'; badgeClass = 'badge-missing'; badgeText = 'PNG Missing';
+      primaryAction = `<button class="action-btn action-amber">Recover from Trash →</button>`;
+    } else if (item.hasPatreonPost ?? item.has_patreon_post) {
+      borderColor = '#10B981'; badgeClass = 'badge-scheduled'; badgeText = 'Scheduled';
+      primaryAction = '';
+    } else if (item.hasCensored ?? item.has_censored) {
+      borderColor = '#EC4899'; badgeClass = 'badge-censored'; badgeText = 'Censored ✓';
+      primaryAction = `<button class="action-btn action-blue">Create Content →</button>`;
+    } else if (hasPsd) {
+      borderColor = '#6366F1'; badgeClass = 'badge-psd'; badgeText = 'PSD ✓';
+      primaryAction = `<button class="action-btn action-blue">Generate PSD →</button>`;
+    } else {
+      borderColor = '#94A3B8'; badgeClass = 'badge-undecided'; badgeText = 'Undecided';
+      primaryAction = `<button class="action-btn action-blue">Generate PSD →</button>`;
+    }
+    fabHtml = '';
+  }
+
+  const stateClass = isDropped ? ' state-dropped' : isKept ? ' state-kept' : '';
+  const src = imgSrc(path, item);
+  const shortName = (item.name ?? inputName).length > 34 ? '…' + (item.name ?? inputName).slice(-32) : (item.name ?? inputName);
+  const dirShort = dir ? dir.split('/').filter(Boolean).pop() ?? dir : '';
+
+  return `
+    <div class="image-card${stateClass}" id="${cid}"
+         style="border-left: 4px solid ${borderColor}">
+      <div class="image-container">
+        ${src
+          ? `<img src="${src}" alt="${esc(inputName)}"
+                  onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+          : ''}
+        <div class="img-placeholder" ${src ? 'style="display:none"' : ''}>🖼️</div>
+        <div class="drop-overlay"><span class="drop-stamp">🗑️ DROP</span></div>
+        ${fabHtml ? `<div class="card-actions">${fabHtml}</div>` : ''}
+      </div>
+      <div class="card-footer">
+        <div class="footer-top">
+          <span class="state-badge ${badgeClass}">${badgeText}</span>
+          <button class="eliminate-btn"
+                  onclick="${inTriageMode ? `dropItem('${escJs(inputName)}')` : 'void(0)'}"
+                  ${isDropped ? 'disabled' : ''}
+                  title="${inTriageMode ? 'Drop' : 'Eliminate'}">✕</button>
+        </div>
+        ${primaryAction}
+        <div class="footer-links">
+          <button class="filter-link" onclick="filterByBg('${escJs(bgName)}')" title="${esc(bgName)}">🏔 ${esc(bgName)}</button>
+          ${dirShort ? `<button class="filter-link" onclick="filterByDir('${escJs(dirShort)}')" title="${esc(dir)}">📁 ${esc(dirShort)}</button>` : ''}
+        </div>
+      </div>
+    </div>`;
+}
+
+// ══════════════════════════════════════════════════════
+// Triage actions
+// ══════════════════════════════════════════════════════
+function dropItem(inputName) {
+  dropped.add(inputName); kept.delete(inputName);
+  refreshCard(inputName);
+  updateTriageChips();
+}
+
+function keepItem(inputName) {
+  kept.add(inputName); dropped.delete(inputName);
+  refreshCard(inputName);
+  updateTriageChips();
+}
+
+function restoreItem(inputName) {
+  dropped.delete(inputName);
+  refreshCard(inputName);
+  updateTriageChips();
+}
+
+function unkeptItem(inputName) {
+  kept.delete(inputName);
+  refreshCard(inputName);
+  updateTriageChips();
+}
+
+function refreshCard(inputName) {
+  // Find all cards for this inputName (could appear multiple times if paginated)
+  const item = augmentedImages.find(i =>
+    (i.inputName ?? i.input_name ?? '') === inputName
+  );
+  if (!item) return;
+  const cid = safe(inputName + '_' + (item.name ?? ''));
+  const el  = document.getElementById(cid);
+  if (!el) return;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = renderCard(item);
+  el.replaceWith(tmp.firstElementChild);
+}
+
+function keepAll() {
+  for (const item of augmentedImages) {
+    const k = item.inputName ?? item.input_name ?? '';
+    if (k) { kept.add(k); dropped.delete(k); }
+  }
+  renderGrid(); updateTriageChips();
+}
+
+function dropAll() {
+  for (const item of augmentedImages) {
+    const k = item.inputName ?? item.input_name ?? '';
+    if (k) { dropped.add(k); kept.delete(k); }
+  }
+  renderGrid(); updateTriageChips();
+}
+
+function updateTriageChips() {
+  if (!selectedBgName) {
+    document.getElementById('triageChips').style.display = 'none';
+    return;
+  }
+  const total    = augmentedImages.length;
+  const nDropped = augmentedImages.filter(i => dropped.has(i.inputName ?? i.input_name ?? '')).length;
+  const nKept    = augmentedImages.filter(i => kept.has(i.inputName ?? i.input_name ?? '')).length;
+  const nUndec   = total - nDropped - nKept;
+
+  const el = document.getElementById('triageChips');
+  el.style.display = 'flex';
+  el.innerHTML = `
+    <span class="chip chip-total">${total} total</span>
+    <span class="chip chip-kept">${nKept} kept</span>
+    <span class="chip chip-dropped">${nDropped} dropped</span>
+    <span class="chip chip-undecided">${nUndec} undecided</span>`;
+}
+
+// ══════════════════════════════════════════════════════
+// Filter shortcuts (card footer links)
+// ══════════════════════════════════════════════════════
+function filterByBg(bgName) {
+  document.getElementById('bgSearch').value = bgName;
+  bgSearch = bgName;
+  doSearch();
+}
+
+function filterByDir(dir) {
+  document.getElementById('dirFilter').value = dir;
+  dirFilter = dir;
+  if (!filtersOpen) toggleFilters();
+}
+
+// ══════════════════════════════════════════════════════
+// Results summary
+// ══════════════════════════════════════════════════════
+function updateResultsSummary() {
+  const el = document.getElementById('resultsSummary');
+  if (!augmentedImages.length && !totalCount) {
+    el.innerHTML = `<span style="color:var(--color-text-muted)">Enter filters above and press Search</span>`;
+    document.getElementById('paginationControls').style.display = 'none';
+    return;
+  }
+  const triageNote = selectedBgName
+    ? ` — <span style="color:#3730A3;font-weight:600">triage mode: ${esc(selectedBgName)}</span>`
+    : '';
+  el.innerHTML = `
+    <span><strong>${totalCount.toLocaleString()}</strong> results${triageNote}</span>
+    <span style="color:var(--color-text-muted)">⚡ ${searchTime}ms</span>
+    <span style="color:var(--color-text-muted)">1–${augmentedImages.length} of ${totalCount}</span>`;
+  document.getElementById('paginationControls').style.display = 'flex';
+}
+
+// ══════════════════════════════════════════════════════
+// UI helpers
+// ══════════════════════════════════════════════════════
+function toggleFilters() {
+  filtersOpen = !filtersOpen;
+  document.getElementById('filtersPanel').style.display = filtersOpen ? 'flex' : 'none';
+  document.getElementById('toggleFiltersBtn').textContent = filtersOpen ? '▲ Filters' : '▼ Filters';
+}
+
+function setPageSize(n) {
+  pageSize = n;
+  [25,50,100].forEach(s => {
+    const btn = document.getElementById(`pageSize${s}`);
+    btn.className = s === n ? 'btn btn-active-warn' : 'btn btn-secondary';
+  });
+}
+
+// ══════════════════════════════════════════════════════
+// Toast
+// ══════════════════════════════════════════════════════
+function toast(msg, type = 'info') {
+  const wrap = document.getElementById('toasts');
+  const t = document.createElement('div');
+  t.className = `toast toast-${type}`;
+  t.textContent = msg;
+  wrap.appendChild(t);
+  setTimeout(() => {
+    t.style.transition = 'opacity 0.3s';
+    t.style.opacity = '0';
+    setTimeout(() => t.remove(), 300);
+  }, 2800);
+}
+</script>
+</body>
+</html>
