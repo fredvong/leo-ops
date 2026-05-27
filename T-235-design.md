@@ -4,7 +4,7 @@
 **Authors:** Ben, Leo  
 **Reviewers:** Peter, Paul  
 **Implementer:** Fae  
-**Location:** `/Users/fvong/work/leo/background_rejection_report.py`
+**Location:** `/Users/fvong/work/leo/background_rejection/`
 
 ---
 
@@ -193,8 +193,8 @@ As a result:
 
 ```bash
 # Fred runs this in his Mac Terminal:
-cd /Users/fvong/work/leo
-python3 background_rejection_report.py --portfolio ~/Portfolio
+cd /Users/fvong/work/leo/background_rejection
+python3 background_rejection_report.py --portfolio ~/Portfolio --output-csv rejected_backgrounds.csv
 ```
 
 No dependencies beyond the Python standard library (`os`, `re`, `csv`, `dataclasses`, `argparse`).
@@ -238,12 +238,24 @@ Ben reviews the algorithm above for correctness and completeness:
 
 ## Fae's Implementation Notes
 
-- Script location: `/Users/fvong/work/leo/background_rejection_report.py`
+**Directory layout:**
+```
+/Users/fvong/work/leo/
+  background_rejection/
+    background_rejection_report.py
+    test_background_rejection.py
+```
+
 - No `__init__.py`, no imports from `image_search` — fully standalone.
 - Copyright header required (Paul's gate).
 - The augmented regex and year-dir filter must match `FILE_STRUCTURE_AND_NAMING.md` exactly — do not copy from memory, read the doc.
-- Tests: `pytest` test file alongside the script at `/Users/fvong/work/leo/test_background_rejection.py`. Use `tmp_path` fixtures to create fake portfolio trees. Cover: empty portfolio, background not found on disk, stem in multiple dirs, `has_liked` detection, threshold edge cases.
+- Tests: `pytest` test file alongside the script. Use `tmp_path` fixtures to create fake portfolio trees. Cover: empty portfolio, background not found on disk, stem in multiple dirs, `has_liked` detection, threshold edge cases, **and read-only assertion** (see Paul's gate below).
 - No Flask, no `lib/` imports, no `sys.exit` in the core logic functions (keep them pure and testable).
+- **Read-only gate (Paul's requirement):** The script must never write to the portfolio or NAS. Add a test (`test_script_is_read_only`) that scans the script source for forbidden write patterns and asserts none are present:
+  - `open(` with mode `w`, `a`, `x`, `wb`, `ab`, `xb`
+  - `os.remove`, `os.unlink`, `os.rename`, `os.makedirs`, `os.mkdir`
+  - `shutil.copy`, `shutil.move`, `shutil.rmtree`
+  The only permitted write is to `--output-csv`, which targets a path the user controls — never under `--portfolio`.
 
 ---
 
