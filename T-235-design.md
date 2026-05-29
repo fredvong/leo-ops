@@ -49,10 +49,10 @@ Regex: `^(.+?)___(.+?)(?:\.v\d+)?\.png$`
 The triple-underscore (`___`) separator is the definitive augmented-image marker.
 
 **Rejection signal — `.trash/` directory:**  
-When Leo moves an augmented image to trash (discards it), it lands in `{session_dir}/.trash/` with its original filename preserved (including `___`). A trashed augmented image is a confirmed rejection of that input+background combination. The `.trash/` subdir is excluded from all normal file listings.
+When the user discards an augmented image, it lands in `{session_dir}/.trash/` with its original filename preserved (including `___`). A trashed augmented image is a confirmed rejection of that input+background combination.
 
 **Liked signal — Censored or PSD sibling:**  
-If any augmented image for a background has a `-Censored.*` or `.psd` sibling in a non-trash session directory, it means Leo already produced a result good enough to process further. These backgrounds may be deprioritised (see `--include-liked` flag below).
+If any augmented image for a background has a `-Censored.*` or `.psd` sibling in a session directory, it means the user already produced a result good enough to process further. These backgrounds may be deprioritised (see `--include-liked` flag below).
 
 Sibling filename patterns (both are parsed for background stem using the same `___` separator):
 - PSD: `{input}___{background}[.vN].psd`
@@ -156,9 +156,9 @@ Sort: ascending by `kept / total` (fewest keepers relative to total, first).
 
 ### Step 4: `write_csv`
 
-Columns: `background_filename, total, kept, rejected`
+Columns: `background_filename, total, kept, rejected, has_liked`
 
-`background_filename` is the bare filename (e.g. `sunset beach.jpg`) — the stable identity per the `backgrounds/` contract. Relative path is not written to CSV; it is not a stable contract (the file may be moved between subdirectories at any time). Silent overwrite if output file already exists.
+`background_filename` is the bare filename (e.g. `sunset beach.jpg`) — the stable identity per the `backgrounds/` contract. Relative path is not written to CSV; it is not a stable contract (the file may be moved between subdirectories at any time). `has_liked` is `True` if any augmented image for this background has a Censored or PSD sibling in a session directory — indicating the user found at least one result good enough to process further. Silent overwrite if output file already exists.
 
 ---
 
@@ -196,14 +196,14 @@ Report written to: rejected_backgrounds.csv
 ## Output CSV
 
 ```
-background_filename,total,kept,rejected
-grey concrete wall.jpg,14,0,14
-blurred neon lights.jpg,9,0,9
-sunset beach.jpg,11,1,10
-dark studio.jpg,7,1,6
+background_filename,total,kept,rejected,has_liked
+grey concrete wall.jpg,14,0,14,False
+blurred neon lights.jpg,9,0,9,True
+sunset beach.jpg,11,1,10,False
+dark studio.jpg,7,1,6,True
 ```
 
-Sorted worst-first (fewest keepers relative to total). Relative path is intentionally omitted — it is not a stable contract and will go stale if the background is moved between subdirectories. Leo passes `background_filename` to Background Studio, which resolves it to the current path on-demand.
+Sorted worst-first (fewest keepers relative to total). Relative path is intentionally omitted — it is not a stable contract and will go stale if the background is moved between subdirectories. `has_liked` distinguishes backgrounds that occasionally produced a Censored/PSD result (description worth improving) from pure-rejection backgrounds (candidate for removal). Leo passes `background_filename` to Background Studio, which resolves it to the current path on-demand.
 
 ---
 
