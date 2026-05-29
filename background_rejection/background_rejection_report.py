@@ -12,7 +12,7 @@ Usage:
     python3 background_rejection_report.py \\
         --portfolio ~/Portfolio \\
         --output-csv data/rejected_backgrounds.csv \\
-        [--min-total 50] \\
+        [--min-total 10] \\
         [--max-kept 2] \\
         [--max-kept-pct 10.0] \\
         [--include-liked]
@@ -300,8 +300,8 @@ def main() -> None:
     parser.add_argument(
         '--min-total',
         type=int,
-        default=50,
-        help='Minimum total augmented images for a background to appear (default: 50)',
+        default=10,
+        help='Minimum total augmented images for a background to appear (default: 10)',
     )
     parser.add_argument(
         '--max-kept',
