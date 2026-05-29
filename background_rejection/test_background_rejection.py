@@ -66,7 +66,7 @@ def test_empty_portfolio(tmp_path):
     output_csv = tmp_path / 'out.csv'
     br.write_csv([], str(output_csv))
     lines = output_csv.read_text().splitlines()
-    assert lines == ['background_filename,total,kept,rejected']
+    assert lines == ['background_filename,total,kept,rejected,has_liked']
 
 
 def test_background_not_found_on_disk(tmp_path, capsys):

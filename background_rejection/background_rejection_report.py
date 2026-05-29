@@ -236,16 +236,20 @@ def write_csv(rows: List[Tuple[str, BackgroundStats]], output_path: str) -> None
     """
     Write the ranked report to a CSV file.
 
-    Columns: background_filename, total, kept, rejected
+    Columns: background_filename, total, kept, rejected, has_liked
     background_filename is the bare filename (e.g. 'sunset beach.jpg') —
     the stable identity. Relative path is intentionally omitted; it is not
     a stable contract and will go stale if the background is moved.
+
+    has_liked indicates whether any augmented image for this background has a
+    Censored or PSD sibling in a session directory — meaning the user found at
+    least one result good enough to process further.
 
     Silently overwrites if the file already exists.
     """
     with open(output_path, 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
-        writer.writerow(['background_filename', 'total', 'kept', 'rejected'])
+        writer.writerow(['background_filename', 'total', 'kept', 'rejected', 'has_liked'])
         for _stem, bg_stats in rows:
             filename = os.path.basename(bg_stats.resolved_path)
             writer.writerow([
@@ -253,6 +257,7 @@ def write_csv(rows: List[Tuple[str, BackgroundStats]], output_path: str) -> None
                 bg_stats.total,
                 bg_stats.kept,
                 bg_stats.rejected,
+                bg_stats.has_liked,
             ])
 
 
