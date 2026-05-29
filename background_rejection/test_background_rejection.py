@@ -183,6 +183,123 @@ def test_threshold_edge_cases(tmp_path):
     assert 'kept2' not in stems_in_output
 
 
+def test_max_kept_pct_filters_correctly(tmp_path):
+    """
+    --max-kept-pct filters by percentage: (kept/total)*100 <= threshold passes.
+
+    Uses max_kept=9999 to disable the absolute gate so the pct gate is the
+    only active filter.
+    """
+    portfolio = make_portfolio(tmp_path)
+
+    def make_bg_with_counts(stem: str, kept: int, rejected: int) -> None:
+        session = make_session(portfolio, '2025', f'2025-01-01 {stem}')
+        for i in range(kept):
+            (session / f'img{i}___{stem}.png').touch()
+        trash = session / '.trash'
+        trash.mkdir()
+        for i in range(rejected):
+            (trash / f'img{i}___{stem}.png').touch()
+        make_bg(portfolio, 'ideas', f'{stem}.jpg')
+
+    # 0/10 = 0% kept → passes 10% gate
+    make_bg_with_counts('zero_pct', kept=0, rejected=10)
+    # 1/10 = 10% kept → exactly at gate (inclusive) → passes
+    make_bg_with_counts('ten_pct', kept=1, rejected=9)
+    # 2/10 = 20% kept → above gate → filtered out
+    make_bg_with_counts('twenty_pct', kept=2, rejected=8)
+
+    stats = br.scan_portfolio(str(portfolio))
+    br.resolve_background_paths(stats, str(portfolio))
+    rows = br.filter_and_sort(
+        stats, min_total=5, max_kept=9999, include_liked=True, max_kept_pct=10.0
+    )
+
+    stems_in_output = {stem for stem, _ in rows}
+    assert 'zero_pct' in stems_in_output
+    assert 'ten_pct' in stems_in_output
+    assert 'twenty_pct' not in stems_in_output
+
+
+def test_max_kept_pct_and_max_kept_both_must_pass(tmp_path):
+    """
+    When both gates are active, a background must satisfy both to appear.
+
+    bg_a: kept=0/10 → passes pct (0%), passes absolute (0 < 2) → IN
+    bg_b: kept=1/10 → passes pct (10%), passes absolute (1 < 2) → IN
+    bg_c: kept=2/10 → fails absolute (2 >= 2) → OUT even though 20% might pass a looser pct gate
+    bg_d: kept=3/10 → passes absolute (3 < 5), but fails pct (30% > 10%) → OUT
+    """
+    portfolio = make_portfolio(tmp_path)
+
+    def make_bg_with_counts(stem: str, kept: int, rejected: int) -> None:
+        session = make_session(portfolio, '2025', f'2025-01-01 {stem}')
+        for i in range(kept):
+            (session / f'img{i}___{stem}.png').touch()
+        trash = session / '.trash'
+        trash.mkdir()
+        for i in range(rejected):
+            (trash / f'img{i}___{stem}.png').touch()
+        make_bg(portfolio, 'ideas', f'{stem}.jpg')
+
+    make_bg_with_counts('bg_a', kept=0, rejected=10)
+    make_bg_with_counts('bg_b', kept=1, rejected=9)
+    make_bg_with_counts('bg_c', kept=2, rejected=8)
+    make_bg_with_counts('bg_d', kept=3, rejected=7)
+
+    stats = br.scan_portfolio(str(portfolio))
+    br.resolve_background_paths(stats, str(portfolio))
+    rows = br.filter_and_sort(
+        stats, min_total=5, max_kept=2, include_liked=True, max_kept_pct=10.0
+    )
+
+    stems_in_output = {stem for stem, _ in rows}
+    assert 'bg_a' in stems_in_output
+    assert 'bg_b' in stems_in_output
+    assert 'bg_c' not in stems_in_output
+    assert 'bg_d' not in stems_in_output
+
+
+def test_max_kept_pct_none_does_not_affect_existing_behaviour(tmp_path):
+    """
+    Passing max_kept_pct=None (the default) leaves existing filter behaviour unchanged.
+    """
+    portfolio = make_portfolio(tmp_path)
+    session = make_session(portfolio, '2025', '2025-01-01 Test')
+    for i in range(3):
+        (session / f'img{i}___hi_yield_bg.png').touch()
+    trash = session / '.trash'
+    trash.mkdir()
+    for i in range(7):
+        (trash / f'img{i}___hi_yield_bg.png').touch()
+    make_bg(portfolio, 'ideas', 'hi_yield_bg.jpg')
+
+    stats = br.scan_portfolio(str(portfolio))
+    br.resolve_background_paths(stats, str(portfolio))
+
+    # With no pct gate, kept=3 < max_kept=5 → appears
+    rows_no_pct = br.filter_and_sort(
+        stats, min_total=5, max_kept=5, include_liked=True, max_kept_pct=None
+    )
+    assert any(stem == 'hi_yield_bg' for stem, _ in rows_no_pct)
+
+
+def test_max_kept_pct_out_of_range_exits(tmp_path):
+    """Invoking the script with --max-kept-pct outside 0–100 must exit non-zero."""
+    import subprocess
+    result = subprocess.run(
+        [
+            sys.executable, str(SCRIPT_PATH),
+            '--portfolio', str(tmp_path),
+            '--output-csv', str(tmp_path / 'out.csv'),
+            '--max-kept-pct', '101',
+        ],
+        capture_output=True,
+    )
+    assert result.returncode != 0
+    assert b'--max-kept-pct' in result.stderr
+
+
 def test_missing_output_csv_exits(tmp_path):
     """Invoking the script without --output-csv must exit with a non-zero code."""
     result = subprocess.run(
