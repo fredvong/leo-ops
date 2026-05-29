@@ -14,6 +14,7 @@ Usage:
         --output-csv data/rejected_backgrounds.csv \\
         [--min-total 50] \\
         [--max-kept 2] \\
+        [--max-kept-pct 10.0] \\
         [--include-liked]
 
 No dependencies beyond the Python standard library.
@@ -205,15 +206,21 @@ def filter_and_sort(
     min_total: int,
     max_kept: int,
     include_liked: bool,
+    max_kept_pct: Optional[float] = None,
 ) -> List[Tuple[str, BackgroundStats]]:
     """
     Filter and sort backgrounds by acceptance rate (worst first).
 
     Inclusion criteria (all must be satisfied):
-    - total >= min_total     — enough attempts to be statistically meaningful
-    - kept < max_kept        — not producing enough keepers
-    - resolved_path is not None  — file confirmed to exist on disk
+    - total >= min_total              — enough attempts to be statistically meaningful
+    - kept < max_kept                 — absolute keeper count below threshold
+    - if max_kept_pct is not None:
+      (kept / total) * 100 <= max_kept_pct  — percentage gate (0–100)
+    - resolved_path is not None       — file confirmed to exist on disk
     - has_liked is False, unless include_liked is True
+
+    When both max_kept and max_kept_pct are provided, a background must satisfy
+    both gates to appear in the output.
     """
     rows = []
     for stem, bg_stats in stats.items():
@@ -221,6 +228,9 @@ def filter_and_sort(
             continue
         if bg_stats.kept >= max_kept:
             continue
+        if max_kept_pct is not None:
+            if (bg_stats.kept / bg_stats.total) * 100 > max_kept_pct:
+                continue
         if bg_stats.resolved_path is None:
             continue
         if bg_stats.has_liked and not include_liked:
@@ -303,6 +313,16 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        '--max-kept-pct',
+        type=float,
+        default=None,
+        help=(
+            'Maximum kept percentage gate (0–100). If provided, only backgrounds '
+            'with (kept / total) * 100 <= MAX_KEPT_PCT are flagged. '
+            'Can be combined with --max-kept; both gates must be satisfied.'
+        ),
+    )
+    parser.add_argument(
         '--include-liked',
         action='store_true',
         help=(
@@ -311,6 +331,13 @@ def main() -> None:
         ),
     )
     args = parser.parse_args()
+
+    if args.max_kept_pct is not None and not (0.0 <= args.max_kept_pct <= 100.0):
+        print(
+            f"ERROR: --max-kept-pct must be between 0 and 100, got {args.max_kept_pct}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     portfolio = os.path.expanduser(args.portfolio)
     if not os.path.isdir(portfolio):
@@ -337,8 +364,13 @@ def main() -> None:
             f"(use --include-liked to override)."
         )
 
-    print(f"Applying filter: total >= {args.min_total}, kept < {args.max_kept}")
-    rows = filter_and_sort(stats, args.min_total, args.max_kept, args.include_liked)
+    filter_desc = f"total >= {args.min_total}, kept < {args.max_kept}"
+    if args.max_kept_pct is not None:
+        filter_desc += f", kept/total <= {args.max_kept_pct}%"
+    print(f"Applying filter: {filter_desc}")
+    rows = filter_and_sort(
+        stats, args.min_total, args.max_kept, args.include_liked, args.max_kept_pct
+    )
 
     eligible = sum(
         1 for s in stats.values()

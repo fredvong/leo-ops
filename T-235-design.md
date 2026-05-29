@@ -1,6 +1,7 @@
 # T-235 Design: Background Rejection Report — Standalone Script
 
-**Status:** Design · 2026-05-26  
+**Status:** Updated · 2026-05-29 (T-249: --max-kept-pct flag added)  
+**Previous:** Design · 2026-05-26  
 **Authors:** Ben, Leo  
 **Reviewers:** Peter, Paul  
 **Implementer:** Fae  
@@ -148,9 +149,12 @@ For each stem in `stats`:
 
 Filter criteria (all must be satisfied):
 - `total >= min_total` — background has been tried enough times to be meaningful
-- `kept < max_kept` — background isn't producing enough keepers
+- `kept < max_kept` — absolute keeper count gate
+- if `--max-kept-pct` is provided: `(kept / total) * 100 <= max_kept_pct` — percentage gate
 - `resolved_path is not None` — background file exists on disk
 - `has_liked is False`, unless `--include-liked` is passed
+
+When both `--max-kept` and `--max-kept-pct` are provided, a background must satisfy **both** gates to appear in the output.
 
 Sort: ascending by `kept / total` (fewest keepers relative to total, first).
 
@@ -170,6 +174,7 @@ python3 background_rejection_report.py \
     --output-csv rejected_backgrounds.csv \
     --min-total 50 \
     --max-kept 2 \
+    [--max-kept-pct 10.0] \
     [--include-liked]
 ```
 
@@ -179,7 +184,18 @@ python3 background_rejection_report.py \
 | `--output-csv` | **Required** — exits with error if omitted | Output CSV path. Silent overwrite if file exists. |
 | `--min-total` | `50` | Minimum total augmented images (inclusive) for a background to appear |
 | `--max-kept` | `2` | Maximum kept images (exclusive) — default catches backgrounds with 0 or 1 keepers |
+| `--max-kept-pct` | None (disabled) | Percentage gate (0–100). Flags backgrounds where `(kept/total)*100 <= MAX_KEPT_PCT`. Can be used alone or combined with `--max-kept`; when both are set, a background must satisfy both. |
 | `--include-liked` | False | Include backgrounds that have Censored/PSD siblings (default: skip them) |
+
+**Recommended invocation (Ada/Ben analysis, T-248):**
+```
+python3 background_rejection_report.py \
+    --portfolio ~/Portfolio \
+    --output-csv data/rejected_backgrounds.csv \
+    --min-total 20 \
+    --max-kept-pct 10.0
+```
+This flags ~158 backgrounds at min_total=20 — a realistic Background Studio workload for Leo. Drop to `--min-total 10` for a comprehensive pass (~538 backgrounds).
 
 **Progress output to stdout:**
 ```
