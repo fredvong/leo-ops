@@ -211,6 +211,7 @@ def test_max_kept_pct_filters_correctly(tmp_path):
 
     stats = br.scan_portfolio(str(portfolio))
     br.resolve_background_paths(stats, str(portfolio))
+    # max_kept=9999 disables the absolute gate so only the pct gate is under test
     rows = br.filter_and_sort(
         stats, min_total=5, max_kept=9999, include_liked=True, max_kept_pct=10.0
     )
