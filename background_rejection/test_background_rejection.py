@@ -301,6 +301,39 @@ def test_max_kept_pct_out_of_range_exits(tmp_path):
     assert b'--max-kept-pct' in result.stderr
 
 
+def test_default_min_total_is_10(tmp_path):
+    """
+    CLI default for --min-total is 10 (T-248).
+
+    Verifies by building a portfolio with a background that has exactly 10
+    uses — it should appear in the output when no --min-total is passed,
+    confirming the default was lowered from 50 to 10.
+    """
+    portfolio = make_portfolio(tmp_path)
+    session = make_session(portfolio, '2025', '2025-01-01 Test')
+    trash = session / '.trash'
+    trash.mkdir()
+    for i in range(10):
+        (trash / f'img{i}___low_use_bg.png').touch()
+    make_bg(portfolio, 'ideas', 'low_use_bg.jpg')
+    output_csv = tmp_path / 'out.csv'
+
+    result = subprocess.run(
+        [
+            sys.executable, str(SCRIPT_PATH),
+            '--portfolio', str(portfolio),
+            '--output-csv', str(output_csv),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, f"Script failed: {result.stderr}"
+    content = output_csv.read_text()
+    assert 'low_use_bg.jpg' in content, (
+        "Background with 10 uses should appear with default --min-total=10"
+    )
+
+
 def test_missing_output_csv_exits(tmp_path):
     """Invoking the script without --output-csv must exit with a non-zero code."""
     result = subprocess.run(
