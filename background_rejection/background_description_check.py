@@ -195,7 +195,7 @@ def call_vlm(
         method='POST',
     )
 
-    with urllib.request.urlopen(req, timeout=120) as response:
+    with urllib.request.urlopen(req, timeout=600) as response:
         body = json.loads(response.read().decode('utf-8'))
 
     raw = body.get('response', '').strip()
