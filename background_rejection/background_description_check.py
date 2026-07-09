@@ -195,7 +195,7 @@ def call_vlm(
         method='POST',
     )
 
-    with urllib.request.urlopen(req, timeout=120) as response:
+    with urllib.request.urlopen(req, timeout=600) as response:
         body = json.loads(response.read().decode('utf-8'))
 
     raw = body.get('response', '').strip()
@@ -321,6 +321,111 @@ def write_csv(results: List[BackgroundCheckResult], output_path: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Targeted re-run for prior error rows
+# ---------------------------------------------------------------------------
+
+def rerun_error_rows(
+    portfolio_root: str,
+    input_csv: str,
+    ollama_url: str,
+    model: str,
+    include_clean: bool,
+) -> RunStats:
+    """
+    Re-process only the rows with VLM errors from a prior output CSV.
+
+    Reads background_path and description_excerpt from the input CSV, resolves
+    each image path against portfolio_root, and re-evaluates with the VLM.
+    Rows that are missing on disk are skipped (counted as no_description).
+
+    This is the recommended path after a batch run with timeouts — all timeout
+    errors are retried with fresh VLM calls rather than assumed FLAGGED.
+
+    Args:
+        portfolio_root: Portfolio root directory (used to resolve background_path).
+        input_csv:      Prior output CSV from this script (with an 'error' column).
+        ollama_url:     Base Ollama URL.
+        model:          Ollama model name.
+        include_clean:  If True, include CLEAN results in returned stats.results.
+
+    Returns:
+        RunStats populated with results for the error rows only.
+    """
+    stats = RunStats()
+
+    if not os.path.isfile(input_csv):
+        print(f"  ERROR: Input CSV not found: {input_csv}", file=sys.stderr)
+        sys.exit(1)
+
+    with open(input_csv, newline='', encoding='utf-8') as f:
+        reader = csv.DictReader(f)
+        all_rows = list(reader)
+
+    error_rows = [r for r in all_rows if r.get('error', '').strip()]
+    stats.total_images = len(error_rows)
+
+    if not error_rows:
+        print(f"  No error rows found in {input_csv}. Nothing to re-run.")
+        return stats
+
+    print(f"  Found {stats.total_images} error row(s) to re-run.")
+
+    for i, row in enumerate(error_rows, 1):
+        rel_path = row['background_path']
+        filename = os.path.basename(rel_path)
+        abs_image_path = os.path.join(portfolio_root, rel_path)
+
+        print(f"\r  [{i:>4}/{stats.total_images}] {filename[:60]:<60}", end='', flush=True)
+
+        if not os.path.isfile(abs_image_path):
+            stats.no_description += 1
+            continue
+
+        # Re-read description from disk (not from the CSV excerpt — excerpt is truncated)
+        desc_file = get_description_file_path(abs_image_path)
+        if not os.path.isfile(desc_file):
+            stats.no_description += 1
+            continue
+
+        try:
+            with open(desc_file, encoding='utf-8') as f:
+                raw_content = f.read()
+        except OSError:
+            stats.no_description += 1
+            continue
+
+        bg_desc = parse_background_description(raw_content)
+        if not bg_desc:
+            stats.no_background_section += 1
+            continue
+
+        try:
+            verdict = call_vlm(abs_image_path, bg_desc, ollama_url, model)
+            error = None
+        except Exception as e:
+            verdict = 'FLAGGED'
+            error = str(e)
+            stats.vlm_errors += 1
+
+        if verdict == 'FLAGGED':
+            stats.flagged += 1
+        else:
+            stats.clean += 1
+
+        if verdict == 'FLAGGED' or include_clean:
+            stats.results.append(BackgroundCheckResult(
+                background_path=rel_path,
+                background_filename=filename,
+                verdict=verdict,
+                description_excerpt=bg_desc[:120],
+                error=error,
+            ))
+
+    print()
+    return stats
+
+
+# ---------------------------------------------------------------------------
 # CLI entry point
 # ---------------------------------------------------------------------------
 
@@ -361,6 +466,16 @@ def main() -> None:
         action='store_true',
         help='Include CLEAN results in the output CSV (default: flagged only)',
     )
+    parser.add_argument(
+        '--rerun-errors-csv',
+        default=None,
+        metavar='CSV',
+        help=(
+            'Re-run only the rows with VLM errors from a prior output CSV. '
+            'Reads background_path and error columns; processes only those images. '
+            'Useful after timeouts to confirm false-positive status.'
+        ),
+    )
     args = parser.parse_args()
 
     portfolio = os.path.expanduser(args.portfolio)
@@ -371,12 +486,19 @@ def main() -> None:
     print(f"Background description check")
     print(f"  Portfolio: {portfolio}")
     print(f"  Model:     {args.model} @ {args.ollama_url}")
-    print(f"Scanning backgrounds/ ...")
 
-    stats = scan_backgrounds(portfolio, args.ollama_url, args.model, args.include_clean)
+    if args.rerun_errors_csv:
+        print(f"Re-running error rows from: {args.rerun_errors_csv}")
+        stats = rerun_error_rows(
+            portfolio, args.rerun_errors_csv, args.ollama_url, args.model, args.include_clean
+        )
+    else:
+        print(f"Scanning backgrounds/ ...")
+        stats = scan_backgrounds(portfolio, args.ollama_url, args.model, args.include_clean)
 
+    label = "error rows re-run" if args.rerun_errors_csv else "images"
     print(f"\nResults:")
-    print(f"  Total images:           {stats.total_images:>6,}")
+    print(f"  Total {label}:".ljust(28) + f"{stats.total_images:>6,}")
     print(f"  No description file:    {stats.no_description:>6,}  (skipped)")
     print(f"  No background section:  {stats.no_background_section:>6,}  (skipped)")
     print(f"  VLM errors:             {stats.vlm_errors:>6,}  (counted as FLAGGED)")

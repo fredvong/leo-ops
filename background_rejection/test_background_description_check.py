@@ -6,6 +6,7 @@ Tests for background_description_check.py
 Uses tmp_path fixtures — no real NAS, VLM, or network access.
 """
 
+import csv
 import json
 import re
 import subprocess
@@ -255,6 +256,107 @@ def test_missing_portfolio_exits(tmp_path):
         capture_output=True,
     )
     assert result.returncode != 0
+
+
+# ---------------------------------------------------------------------------
+# rerun_error_rows
+# ---------------------------------------------------------------------------
+
+class TestRerunErrorRows:
+    """Tests for the targeted re-run path (--rerun-errors-csv)."""
+
+    def _make_portfolio(self, tmp_path: Path, background: str = "A misty forest.") -> tuple:
+        """Create a minimal portfolio with one background image + description."""
+        portfolio = tmp_path / "portfolio"
+        img = portfolio / "backgrounds" / "ideas" / "photo.jpg"
+        img.parent.mkdir(parents=True)
+        img.write_bytes(b"\xff\xd8\xff")
+        make_description_file(img, background=background)
+        return portfolio, img
+
+    def _make_error_csv(self, tmp_path: Path, portfolio: Path, img: Path, error: str = "timed out") -> Path:
+        """Write a prior flagged CSV with one error row."""
+        csv_path = tmp_path / "flagged.csv"
+        rel = str(img.relative_to(portfolio))
+        with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(['background_path', 'background_filename', 'verdict',
+                             'description_excerpt', 'error'])
+            writer.writerow([rel, img.name, 'FLAGGED', 'A misty forest.', error])
+        return csv_path
+
+    def test_error_row_retried_and_comes_back_clean(self, tmp_path):
+        portfolio, img = self._make_portfolio(tmp_path)
+        csv_path = self._make_error_csv(tmp_path, portfolio, img)
+
+        with patch("background_description_check.call_vlm", return_value="CLEAN"):
+            stats = bdc.rerun_error_rows(
+                str(portfolio), str(csv_path), "http://localhost:11434", "model", True
+            )
+
+        assert stats.total_images == 1
+        assert stats.clean == 1
+        assert stats.flagged == 0
+        assert stats.vlm_errors == 0
+        assert stats.results[0].verdict == "CLEAN"
+
+    def test_error_row_still_times_out_counts_as_flagged(self, tmp_path):
+        portfolio, img = self._make_portfolio(tmp_path)
+        csv_path = self._make_error_csv(tmp_path, portfolio, img)
+
+        with patch("background_description_check.call_vlm",
+                   side_effect=Exception("timed out")):
+            stats = bdc.rerun_error_rows(
+                str(portfolio), str(csv_path), "http://localhost:11434", "model", False
+            )
+
+        assert stats.vlm_errors == 1
+        assert stats.flagged == 1
+        assert stats.results[0].error == "timed out"
+
+    def test_no_error_rows_returns_empty_stats(self, tmp_path):
+        portfolio, img = self._make_portfolio(tmp_path)
+        # CSV with no error column values
+        csv_path = tmp_path / "flagged.csv"
+        rel = str(img.relative_to(portfolio))
+        with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(['background_path', 'background_filename', 'verdict',
+                             'description_excerpt', 'error'])
+            writer.writerow([rel, img.name, 'FLAGGED', 'A forest.', ''])  # no error
+
+        with patch("background_description_check.call_vlm", return_value="FLAGGED"):
+            stats = bdc.rerun_error_rows(
+                str(portfolio), str(csv_path), "http://localhost:11434", "model", False
+            )
+
+        assert stats.total_images == 0
+        assert len(stats.results) == 0
+
+    def test_missing_image_on_disk_counted_as_no_description(self, tmp_path):
+        portfolio, img = self._make_portfolio(tmp_path)
+        csv_path = self._make_error_csv(tmp_path, portfolio, img)
+        img.unlink()  # delete the actual image
+
+        stats = bdc.rerun_error_rows(
+            str(portfolio), str(csv_path), "http://localhost:11434", "model", False
+        )
+
+        assert stats.no_description == 1
+        assert stats.total_images == 1
+        assert stats.clean == 0
+
+    def test_clean_excluded_without_include_clean(self, tmp_path):
+        portfolio, img = self._make_portfolio(tmp_path)
+        csv_path = self._make_error_csv(tmp_path, portfolio, img)
+
+        with patch("background_description_check.call_vlm", return_value="CLEAN"):
+            stats = bdc.rerun_error_rows(
+                str(portfolio), str(csv_path), "http://localhost:11434", "model", False
+            )
+
+        assert stats.clean == 1
+        assert len(stats.results) == 0  # CLEAN excluded when include_clean=False
 
 
 # ---------------------------------------------------------------------------
